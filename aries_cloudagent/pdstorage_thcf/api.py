@@ -8,18 +8,21 @@ import multibase
 table_that_matches_plugins_with_ids = {}
 
 
-async def load_string(context: RequestContext, id: str, pds_type: str = None):
+async def load_string(context: RequestContext, id: str) -> str:
     if id == None:
         return None
     id = str(id)
 
-    if pds_type != None:
-        plugin = pds_type
-
-    else:
-        plugin = table_that_matches_plugins_with_ids.get(id)
-        if plugin == None:
-            return None
+    plugin = table_that_matches_plugins_with_ids.get(id)
+    if plugin == None:
+        print()
+        assert (
+            plugin != None
+        ), f"""table_that_matches_plugins_with_ids has an id that matches with None value 
+            table_that_matches_plugins_with_ids: {table_that_matches_plugins_with_ids}
+            input id: {id}
+            plugin: {plugin}
+            """
 
     pds: BasePersonalDataStorage = await context.inject(
         BasePersonalDataStorage, {"personal_storage_type": plugin}
@@ -29,17 +32,14 @@ async def load_string(context: RequestContext, id: str, pds_type: str = None):
     return result
 
 
-async def save_string(context: RequestContext, payload: str):
+async def save_string(context: RequestContext, payload: str) -> str:
     if payload == None:
         return None
 
     pds: BasePersonalDataStorage = await context.inject(BasePersonalDataStorage)
     active_plugin = context.settings.get("personal_storage_type")
 
-    print("Payload: ", payload)
     payload_id = await pds.save(payload)
-    payload_id = str(payload_id)
-
     table_that_matches_plugins_with_ids[payload_id] = active_plugin
 
     return payload_id
@@ -52,10 +52,4 @@ def encode(data: str) -> str:
     result = multibase.encode("base58btc", multi)
 
     return result.decode("utf-8")
-
-
-# def get_hash_info(data: bytes) -> tuple:
-#     data = multibase.decode(data)
-#     data = multihash.decode(data)
-#     return data
 

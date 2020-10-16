@@ -91,6 +91,8 @@ async def get_record_from_agent(request: web.BaseRequest):
     except (WalletError, StorageError) as err:
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
+    print("get_record_from_agent ID settings ", id(context.settings))
+    print("get_record_from_agent ID context ", id(context))
     outbound_handler = request.app["outbound_message_router"]
     message = ExchangeDataA(payload_dri=payload_id)
     await outbound_handler(message, connection_id=connection_id)
@@ -165,6 +167,7 @@ async def get_settings(request: web.BaseRequest):
 @request_schema(SetActiveStorageTypeSchema())
 async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
+
     body = await request.json()
 
     personal_storage_type = body.get("type", None)

@@ -47,6 +47,5 @@ class ExchangeDataBHandler(BaseHandler):
         except PersonalDataStorageError as err:
             raise err.roll_up
 
-        print("payload saved payload_dri:", payload_dri)
         if context.message.payload_dri:
             assert context.message.payload_dri == payload_dri
