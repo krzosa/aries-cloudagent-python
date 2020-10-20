@@ -8,6 +8,9 @@ from aries_cloudagent.messaging.base_handler import (
     RequestContext,
 )
 from ..protocols.problem_report.v1_0.message import ProblemReport
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ExchangeDataAHandler(BaseHandler):
@@ -16,7 +19,7 @@ class ExchangeDataAHandler(BaseHandler):
     """
 
     async def handle(self, context: RequestContext, responder: BaseResponder):
-        print("ExchangeDataAHandler")
+        LOGGER.info("ExchangeDataAHandler called with context %s", context)
         assert isinstance(context.message, ExchangeDataA)
         payload_dri = context.message.payload_dri
 
@@ -25,7 +28,7 @@ class ExchangeDataAHandler(BaseHandler):
             if payload == None:
                 raise PersonalDataStorageNotFoundError
         except PersonalDataStorageError as err:
-            print("TODO: ExchangeDataAHandler ProblemReport")
+            LOGGER.warning("TODO: ExchangeDataAHandler ProblemReport %s", err.roll_up)
             return
 
         response = ExchangeDataB(payload=payload, payload_dri=payload_dri)
@@ -39,7 +42,7 @@ class ExchangeDataBHandler(BaseHandler):
     """
 
     async def handle(self, context: RequestContext, responder: BaseResponder):
-        print("ExchangeDataBHandler")
+        LOGGER.info("ExchangeDataBHandler called with context %s", context)
         assert isinstance(context.message, ExchangeDataB)
 
         try:
@@ -48,4 +51,6 @@ class ExchangeDataBHandler(BaseHandler):
             raise err.roll_up
 
         if context.message.payload_dri:
-            assert context.message.payload_dri == payload_dri
+            assert (
+                context.message.payload_dri == payload_dri
+            ), "dri's differ between agents!"

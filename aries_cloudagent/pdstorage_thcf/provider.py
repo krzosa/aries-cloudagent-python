@@ -14,16 +14,21 @@ class PersonalDataStorageProvider(BaseProvider):
         storage_type = settings.get("personal_storage_type")
         registered_types = settings.get("personal_storage_registered_types")
 
-        print("PersonalDataStorage type", storage_type)
-        assert storage_type != None, "Bug in active personal_storage_type, it's None"
+        LOGGER.info("PersonalDataStorage type %s", storage_type)
+        assert storage_type[0] != None, "active personal_storage_type, is None"
+        assert isinstance(storage_type, tuple), "storage_type is not a tuple"
 
         if storage_type not in self.cached_instances:
-            storage_class = registered_types.get(storage_type)
+            storage_class = registered_types.get(storage_type[0])
             assert storage_class != None, "Storage type / class is not registered"
 
             public_data_storage = ClassLoader.load_class(storage_class)
             self.cached_instances[storage_type] = public_data_storage()
 
-            print("PersonalDataStorage create", self.cached_instances)
+            LOGGER.info(
+                f"""CREATE storage_type: {storage_type}
+                    self.cached_instances: {self.cached_instances}
+                    """
+            )
 
         return self.cached_instances[storage_type]

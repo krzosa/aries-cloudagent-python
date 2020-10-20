@@ -11,18 +11,16 @@ table_that_matches_plugins_with_ids = {}
 async def load_string(context: RequestContext, id: str) -> str:
     if id == None:
         return None
-    id = str(id)
+    assert isinstance(id, str), "Id is not a string"
 
-    plugin = table_that_matches_plugins_with_ids.get(id)
-    if plugin == None:
-        print()
-        assert (
-            plugin != None
-        ), f"""table_that_matches_plugins_with_ids has an id that matches with None value 
-            table_that_matches_plugins_with_ids: {table_that_matches_plugins_with_ids}
-            input id: {id}
-            plugin: {plugin}
-            """
+    plugin = table_that_matches_plugins_with_ids.get(id, None)
+    assert (
+        plugin != None
+    ), f"""table_that_matches_plugins_with_ids has an id that matches with None value 
+        table_that_matches_plugins_with_ids: {table_that_matches_plugins_with_ids}
+        input id: {id}
+        plugin: {plugin}
+        """
 
     pds: BasePersonalDataStorage = await context.inject(
         BasePersonalDataStorage, {"personal_storage_type": plugin}
@@ -35,6 +33,7 @@ async def load_string(context: RequestContext, id: str) -> str:
 async def save_string(context: RequestContext, payload: str) -> str:
     if payload == None:
         return None
+    assert isinstance(payload, str), "payload is not a string"
 
     pds: BasePersonalDataStorage = await context.inject(BasePersonalDataStorage)
     active_plugin = context.settings.get("personal_storage_type")

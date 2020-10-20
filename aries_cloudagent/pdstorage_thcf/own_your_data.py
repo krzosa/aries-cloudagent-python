@@ -3,8 +3,11 @@ from .api import encode
 from .error import *
 
 import json
+import logging
 
 from aiohttp import ClientSession, FormData
+
+LOGGER = logging.getLogger(__name__)
 
 API_DATA_VAULT = "https://data-vault.eu"
 API_TOKEN = API_DATA_VAULT + "/oauth/token"
@@ -55,7 +58,7 @@ class OwnYourDataVault(BasePersonalDataStorage):
             result = await result.text()
             token = json.loads(result)
             self.token = token
-            print("self.token", self.token)
+            LOGGER.info("update token: %s", self.token)
 
     async def load(self, id: str) -> str:
         """
@@ -71,7 +74,7 @@ class OwnYourDataVault(BasePersonalDataStorage):
             )
             result = await result.text()
             result = json.loads(result)
-            print(result)
+            LOGGER.info("Result of GET request %s", result)
 
         return result.get("content")
 
@@ -92,5 +95,6 @@ class OwnYourDataVault(BasePersonalDataStorage):
             )
             result = await result.text()
             result = json.loads(result)
+            LOGGER.info("Result of POST request %s", result)
 
         return dri_value

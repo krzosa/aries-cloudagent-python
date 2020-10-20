@@ -26,6 +26,7 @@ class SaveRecordSchema(Schema):
 
 class SetActiveStorageTypeSchema(Schema):
     type = fields.Str(required=True)
+    optional_name = fields.Str(required=False)
 
 
 class GetRecordFromAgentSchema(Schema):
@@ -35,6 +36,13 @@ class GetRecordFromAgentSchema(Schema):
 
 class SaveSettingsSchema(Schema):
     settings = fields.Dict(required=False)
+
+
+class GetSettingsSchema(Schema):
+    optional_name: fields.Str(
+        description="By providing a different name a new instance is created",
+        required=False,
+    )
 
 
 @docs(tags=["PersonalDataStorage"], summary="Save data in a public data storage")
@@ -76,13 +84,11 @@ async def get_record(request: web.BaseRequest):
     tags=["PersonalDataStorage"],
     summary="Retrieve data from a public data storage using data id",
 )
-@request_schema(GetRecordFromAgentSchema())
+@querystring_schema(GetRecordFromAgentSchema())
 async def get_record_from_agent(request: web.BaseRequest):
     context = request.app["request_context"]
-    body = await request.json()
-
-    connection_id = body.get("connection_id")
-    payload_id = body.get("payload_id")
+    connection_id = request.query.get("connection_id")
+    payload_id = request.query.get("payload_id")
 
     try:
         connection_record: ConnectionRecord = await ConnectionRecord.retrieve_by_id(
@@ -91,12 +97,10 @@ async def get_record_from_agent(request: web.BaseRequest):
     except (WalletError, StorageError) as err:
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
-    print("get_record_from_agent ID settings ", id(context.settings))
-    print("get_record_from_agent ID context ", id(context))
     outbound_handler = request.app["outbound_message_router"]
     message = ExchangeDataA(payload_dri=payload_id)
     await outbound_handler(message, connection_id=connection_id)
-    return web.json_response({"message sent": "a"})
+    return web.json_response({"message_sent": "success"})
 
 
 @docs(
@@ -108,12 +112,15 @@ async def get_record_from_agent(request: web.BaseRequest):
         "settings":
         {
             "local": {
+                "optional_instance_name: "default",
                 "no_configuration_needed": "yes-1234"
             },
             "data_vault": {
+                "optional_instance_name: "default",
                 "no_configuration_needed": "yes-1234"
             },
             "own_your_data": {
+                "optional_instance_name: "default",
                 "client_id": "test-1234",
                 "client_secret": "test-1234",
                 "grant_type": "client_credentials"
@@ -132,10 +139,15 @@ async def set_settings(request: web.BaseRequest):
         raise web.HTTPNotFound(reason="Settings schema is empty")
 
     for key in settings:
+        current_setting = settings.get(key)
+        instance_name = current_setting.get("optional_instance_name", "default")
+
         personal_storage: BasePersonalDataStorage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": key}
+            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
         )
-        personal_storage.settings.update(settings.get(key))
+
+        current_setting.pop("optional_instance_name", None)
+        personal_storage.settings.update(current_setting)
 
     return web.json_response({"success": "settings_updated"})
 
@@ -148,11 +160,12 @@ async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
     registered_types = context.settings.get("personal_storage_registered_types")
     active_storage_type = context.settings.get("personal_storage_type")
-    response_message = {}
+    instance_name = "default"
 
+    response_message = {}
     for key in registered_types:
         personal_storage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": key}
+            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
         )
         response_message.update({key: personal_storage.preview_settings})
 
@@ -164,26 +177,24 @@ async def get_settings(request: web.BaseRequest):
     summary="Set a public data storage type by name",
     description="for example: 'local', get possible types by calling 'GET /pds' endpoint",
 )
-@request_schema(SetActiveStorageTypeSchema())
+@querystring_schema(SetActiveStorageTypeSchema())
 async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
-
-    body = await request.json()
-
-    personal_storage_type = body.get("type", None)
+    instance_name = request.query.get("optional_name", "default")
+    pds_type = request.query.get("type", None)
+    pds_type_tuple = (pds_type, instance_name)
 
     check_if_storage_type_is_registered = context.settings.get_value(
         "personal_storage_registered_types"
-    ).get(personal_storage_type)
+    ).get(pds_type)
 
     if check_if_storage_type_is_registered == None:
         raise web.HTTPNotFound(
             reason="Chosen type is not in the registered list, make sure there are no typos! Use GET settings to look for registered types"
         )
 
-    context.settings.set_value("personal_storage_type", personal_storage_type)
-
-    return web.json_response({"success_type_exists": personal_storage_type})
+    context.settings.set_value("personal_storage_type", pds_type_tuple)
+    return web.json_response({"success_type_exists": pds_type_tuple})
 
 
 @docs(
@@ -194,11 +205,12 @@ async def get_storage_types(request: web.BaseRequest):
     context = request.app["request_context"]
     registered_types = context.settings.get("personal_storage_registered_types")
     active_storage_type = context.settings.get("personal_storage_type")
+    instance_name = "default"
 
     registered_type_names = []
     for key in registered_types:
         personal_storage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": key}
+            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
         )
         if personal_storage.settings != {}:
             registered_type_names.append(key)
