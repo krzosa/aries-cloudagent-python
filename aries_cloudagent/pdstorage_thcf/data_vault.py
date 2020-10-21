@@ -43,7 +43,7 @@ class DataVault(BasePersonalDataStorage):
             if "errors" in response_json:
                 return None
         except json.JSONDecodeError:
-            LOGGER.warning("Error found in data_vault load %s", response_json)
+            LOGGER.warning("Error found in data_vault load %s", response_text)
             pass
 
         return response_text

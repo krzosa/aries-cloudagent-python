@@ -16,8 +16,9 @@ from .api import load_string, save_string
 from .error import *
 from ..connections.models.connection_record import ConnectionRecord
 from ..wallet.error import WalletError
-from ..storage.error import StorageError
+from ..storage.error import StorageNotFoundError, StorageError
 from .message_types import *
+from .models.saved_personal_storage import SavedPersonalStorage
 
 
 class SaveRecordSchema(Schema):
@@ -138,16 +139,32 @@ async def set_settings(request: web.BaseRequest):
     if settings == None:
         raise web.HTTPNotFound(reason="Settings schema is empty")
 
-    for key in settings:
-        current_setting = settings.get(key)
-        instance_name = current_setting.get("optional_instance_name", "default")
+    for type in settings:
+        per_type_setting = settings.get(type)
+        instance_name = per_type_setting.get("optional_instance_name", "default")
+        per_type_setting.pop("optional_instance_name", None)
 
+        # create or update a saved pds
+        try:
+            saved_pds = await SavedPersonalStorage.retrieve_type_name(
+                context, type, instance_name
+            )
+            saved_pds.settings = per_type_setting
+        except StorageNotFoundError:
+            saved_pds = SavedPersonalStorage(
+                type=type,
+                name=instance_name,
+                state=SavedPersonalStorage.INACTIVE,
+                settings=per_type_setting,
+            )
+
+        await saved_pds.save(context)
+
+        # update active pds instances with new settings
         personal_storage: BasePersonalDataStorage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
+            BasePersonalDataStorage, {"personal_storage_type": (type, instance_name)}
         )
-
-        current_setting.pop("optional_instance_name", None)
-        personal_storage.settings.update(current_setting)
+        personal_storage.settings.update(per_type_setting)
 
     return web.json_response({"success": "settings_updated"})
 
@@ -158,16 +175,17 @@ async def set_settings(request: web.BaseRequest):
 )
 async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
-    registered_types = context.settings.get("personal_storage_registered_types")
-    active_storage_type = context.settings.get("personal_storage_type")
-    instance_name = "default"
+
+    try:
+        saved_pds = await SavedPersonalStorage.query(context)
+        assert isinstance(saved_pds, list), f"not list {saved_pds}, {type(saved_pds)}"
+        print("get_settings saved_pds:", saved_pds)
+    except StorageError as err:
+        raise web.HTTPError(reason=err.roll_up)
 
     response_message = {}
-    for key in registered_types:
-        personal_storage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
-        )
-        response_message.update({key: personal_storage.preview_settings})
+    for pds in saved_pds:
+        response_message.update({f"{pds.type}, {pds.name}": pds.settings})
 
     return web.json_response(response_message)
 
@@ -182,7 +200,6 @@ async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
     instance_name = request.query.get("optional_name", "default")
     pds_type = request.query.get("type", None)
-    pds_type_tuple = (pds_type, instance_name)
 
     check_if_storage_type_is_registered = context.settings.get_value(
         "personal_storage_registered_types"
@@ -193,8 +210,26 @@ async def set_active_storage_type(request: web.BaseRequest):
             reason="Chosen type is not in the registered list, make sure there are no typos! Use GET settings to look for registered types"
         )
 
-    context.settings.set_value("personal_storage_type", pds_type_tuple)
-    return web.json_response({"success_type_exists": pds_type_tuple})
+    try:
+        pds_to_activate = await SavedPersonalStorage.retrieve_type_name(
+            context, pds_type, instance_name
+        )
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(reason="Couldn't find this storage" + err.roll_up)
+
+    try:
+        active_pds = await SavedPersonalStorage.retrieve_active(context)
+
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
+
+    active_pds.state = SavedPersonalStorage.INACTIVE
+    pds_to_activate.state = SavedPersonalStorage.ACTIVE
+
+    await active_pds.save(context)
+    await pds_to_activate.save(context)
+
+    return web.json_response({"success_type_exists": f"{pds_type}, {instance_name}"})
 
 
 @docs(
@@ -204,8 +239,12 @@ async def set_active_storage_type(request: web.BaseRequest):
 async def get_storage_types(request: web.BaseRequest):
     context = request.app["request_context"]
     registered_types = context.settings.get("personal_storage_registered_types")
-    active_storage_type = context.settings.get("personal_storage_type")
     instance_name = "default"
+
+    try:
+        active_pds = await SavedPersonalStorage.retrieve_active(context)
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
 
     registered_type_names = []
     for key in registered_types:
@@ -216,7 +255,10 @@ async def get_storage_types(request: web.BaseRequest):
             registered_type_names.append(key)
 
     return web.json_response(
-        {"active": active_storage_type, "types": registered_type_names}
+        {
+            "active": f"{active_pds.type}, {active_pds.name}",
+            "types": registered_type_names,
+        }
     )
 
 

@@ -1,9 +1,11 @@
 from .base import BasePersonalDataStorage
 from .error import *
 from ..messaging.request_context import RequestContext
+from .models.saved_personal_storage import SavedPersonalStorage
 import hashlib
 import multihash
 import multibase
+from aries_cloudagent.storage.error import StorageNotFoundError
 
 table_that_matches_plugins_with_ids = {}
 
@@ -35,11 +37,17 @@ async def save_string(context: RequestContext, payload: str) -> str:
         return None
     assert isinstance(payload, str), "payload is not a string"
 
-    pds: BasePersonalDataStorage = await context.inject(BasePersonalDataStorage)
-    active_plugin = context.settings.get("personal_storage_type")
+    try:
+        active_pds = await SavedPersonalStorage.retrieve_active(context)
+    except StorageNotFoundError as err:
+        raise PersonalDataStorageNotFoundError("No active pds found")
 
+    pds: BasePersonalDataStorage = await context.inject(
+        BasePersonalDataStorage, {"personal_storage_type": active_pds.get_pds_name()}
+    )
     payload_id = await pds.save(payload)
-    table_that_matches_plugins_with_ids[payload_id] = active_plugin
+
+    table_that_matches_plugins_with_ids[payload_id] = active_pds.get_pds_name()
 
     return payload_id
 

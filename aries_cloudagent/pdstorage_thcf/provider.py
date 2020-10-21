@@ -2,6 +2,7 @@ import logging
 
 from ..config.base import BaseProvider, BaseInjector, BaseSettings
 from ..utils.classloader import ClassLoader
+from .models.saved_personal_storage import SavedPersonalStorage
 
 LOGGER = logging.getLogger(__name__)
 
