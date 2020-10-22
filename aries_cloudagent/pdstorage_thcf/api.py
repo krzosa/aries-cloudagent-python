@@ -6,6 +6,7 @@ import hashlib
 import multihash
 import multibase
 from aries_cloudagent.storage.error import StorageNotFoundError
+from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
 
 table_that_matches_plugins_with_ids = {}
 
@@ -15,17 +16,22 @@ async def load_string(context: RequestContext, id: str) -> str:
         return None
     assert isinstance(id, str), "Id is not a string"
 
-    plugin = table_that_matches_plugins_with_ids.get(id, None)
-    assert (
-        plugin != None
-    ), f"""table_that_matches_plugins_with_ids has an id that matches with None value 
+    # plugin = table_that_matches_plugins_with_ids.get(id, None)
+    try:
+        match = await DriStorageMatchTable.retrieve_by_id(context, id)
+    except StorageNotFoundError as err:
+        print(
+            f"""table_that_matches_plugins_with_ids has an id that matches with None value 
         table_that_matches_plugins_with_ids: {table_that_matches_plugins_with_ids}
         input id: {id}
-        plugin: {plugin}
+        plugin: {match}
+        ERROR: {err.roll_up}
         """
+        )
+        raise PersonalDataStorageNotFoundError(err)
 
     pds: BasePersonalDataStorage = await context.inject(
-        BasePersonalDataStorage, {"personal_storage_type": plugin}
+        BasePersonalDataStorage, {"personal_storage_type": match.pds_type}
     )
     result = await pds.load(id)
 
@@ -47,7 +53,8 @@ async def save_string(context: RequestContext, payload: str) -> str:
     )
     payload_id = await pds.save(payload)
 
-    table_that_matches_plugins_with_ids[payload_id] = active_pds.get_pds_name()
+    match_table = DriStorageMatchTable(payload_id, active_pds.get_pds_name())
+    payload_id = await match_table.save(context)
 
     return payload_id
 

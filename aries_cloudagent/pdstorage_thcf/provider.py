@@ -17,7 +17,12 @@ class PersonalDataStorageProvider(BaseProvider):
 
         LOGGER.info("PersonalDataStorage type %s", storage_type)
         assert storage_type[0] != None, "active personal_storage_type, is None"
-        assert isinstance(storage_type, tuple), "storage_type is not a tuple"
+        if type(storage_type) == list:
+            storage_type = tuple(storage_type)
+
+        assert isinstance(
+            storage_type, tuple
+        ), f"storage_type is not a tuple, type: {type(storage_type)}, storage_type: {storage_type}"
 
         if storage_type not in self.cached_instances:
             storage_class = registered_types.get(storage_type[0])
