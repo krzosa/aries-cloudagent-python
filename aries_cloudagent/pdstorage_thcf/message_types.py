@@ -1,4 +1,4 @@
-PROTOCOL_URI = "/debug/pds"
+PROTOCOL_URI = "/debug/pds/1.0"
 PROTOCOL_PACKAGE = "aries_cloudagent.pdstorage_thcf"
 
 EXCHANGE_DATA_A = f"{PROTOCOL_URI}/exchange_data_a"
@@ -23,11 +23,8 @@ class ExchangeDataA(AgentMessage):
         message_type = EXCHANGE_DATA_A
 
     def __init__(
-        self,
-        *,
-        payload_dri,
-        **kwargs,
-    ):
+        self, *, payload_dri, **kwargs,
+):
         super().__init__(**kwargs)
         self.payload_dri = payload_dri
 

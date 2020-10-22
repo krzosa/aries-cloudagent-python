@@ -32,6 +32,7 @@ from ..transport.outbound.message import OutboundMessage
 from ..transport.wire_format import BaseWireFormat
 from ..utils.task_queue import CompletedTask, TaskQueue
 from ..utils.stats import Collector
+from ..config.pdstorage import personal_data_storage_config
 
 from .dispatcher import Dispatcher
 
@@ -93,6 +94,9 @@ class Conductor:
         # Configure the ledger
         if not await ledger_config(context, public_did):
             LOGGER.warning("No ledger configured")
+
+        # Configure the personal data storage
+        await personal_data_storage_config(context)
 
         # Admin API
         if context.settings.get("admin.enabled"):
