@@ -254,8 +254,7 @@ async def get_storage_types(request: web.BaseRequest):
         personal_storage = await context.inject(
             BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
         )
-        if personal_storage.settings != {}:
-            registered_type_names.append(key)
+        registered_type_names.append(key)
 
     return web.json_response(
         {
