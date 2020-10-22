@@ -15,15 +15,16 @@ class PersonalDataStorageProvider(BaseProvider):
         storage_type = settings.get("personal_storage_type")
         registered_types = settings.get("personal_storage_registered_types")
 
+        # error checking code
         LOGGER.info("PersonalDataStorage type %s", storage_type)
         assert storage_type[0] != None, "active personal_storage_type, is None"
         if type(storage_type) == list:
             storage_type = tuple(storage_type)
-
         assert isinstance(
             storage_type, tuple
         ), f"storage_type is not a tuple, type: {type(storage_type)}, storage_type: {storage_type}"
 
+        # create a singleton object if there is no object of specified name tuple
         if storage_type not in self.cached_instances:
             storage_class = registered_types.get(storage_type[0])
             assert storage_class != None, "Storage type / class is not registered"

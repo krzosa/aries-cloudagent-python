@@ -4,11 +4,12 @@ from ..messaging.request_context import RequestContext
 from .models.saved_personal_storage import SavedPersonalStorage
 import hashlib
 import multihash
+import logging
 import multibase
 from aries_cloudagent.storage.error import StorageNotFoundError
 from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
 
-table_that_matches_plugins_with_ids = {}
+LOGGER = logging.getLogger(__name__)
 
 
 async def load_string(context: RequestContext, id: str) -> str:
@@ -20,13 +21,12 @@ async def load_string(context: RequestContext, id: str) -> str:
     try:
         match = await DriStorageMatchTable.retrieve_by_id(context, id)
     except StorageNotFoundError as err:
-        print(
+        LOGGER.info(
             f"""table_that_matches_plugins_with_ids has an id that matches with None value 
-        table_that_matches_plugins_with_ids: {table_that_matches_plugins_with_ids}
-        input id: {id}
-        plugin: {match}
-        ERROR: {err.roll_up}
-        """
+                input id: {id}
+                plugin: {match}
+                ERROR: {err.roll_up}
+            """
         )
         raise PersonalDataStorageNotFoundError(err)
 

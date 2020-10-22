@@ -79,6 +79,7 @@ class OwnYourDataVault(BasePersonalDataStorage):
         return result.get("content")
 
     async def save(self, record: str) -> str:
+        oyd_repo = self.settings.get("repo")
         dri_value = encode(record)
         await self.update_token()
         async with ClientSession() as session:
@@ -88,9 +89,9 @@ class OwnYourDataVault(BasePersonalDataStorage):
                 json={
                     "content": record,
                     "dri": dri_value,
-                    #               "schema_dri": dri_schema_value,
+                    # "schema_dri": dri_schema_value,
                     "mime_type": "application/json",
-                    "table_name": "dip.data",
+                    "table_name": oyd_repo if oyd_repo != None else "dip.data",
                 },
             )
             result = await result.text()

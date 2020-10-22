@@ -117,11 +117,11 @@ async def get_record_from_agent(request: web.BaseRequest):
                 "no_configuration_needed": "yes-1234"
             },
             "data_vault": {
-                "optional_instance_name: "default",
+                "optional_instance_name: "not_default",
                 "no_configuration_needed": "yes-1234"
             },
             "own_your_data": {
-                "optional_instance_name: "default",
+                "optional_instance_name: "default_no_cool",
                 "client_id": "test-1234",
                 "client_secret": "test-1234",
                 "grant_type": "client_credentials"
@@ -139,6 +139,9 @@ async def set_settings(request: web.BaseRequest):
     if settings == None:
         raise web.HTTPNotFound(reason="Settings schema is empty")
 
+    # get all pds configurations from the user's input json
+    # and either update all specified instances or create new instances
+    # for types which are not existent
     for type in settings:
         per_type_setting = settings.get(type)
         instance_name = per_type_setting.get("optional_instance_name", "default")
