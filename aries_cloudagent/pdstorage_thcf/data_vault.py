@@ -26,10 +26,10 @@ class DataVault(BasePersonalDataStorage):
         url = f"{self.settings['host']}{API_ENDPOINT}{'/'}{id}"
         LOGGER.info(
             f"""DataVault.load: 
-        url: {url}
-        id: {id}
-        settings: {self.settings}
-        """
+                url: {url}
+                id: {id}
+                settings: {self.settings}
+            """
         )
 
         async with ClientSession() as session:
@@ -54,10 +54,10 @@ class DataVault(BasePersonalDataStorage):
         url = f"{self.settings['host']}{API_ENDPOINT}"
         LOGGER.info(
             f"""DataVault.save: 
-        url: {url}
-        id: {id}
-        settings: {self.settings}
-        """
+                url: {url}
+                id: {id}
+                settings: {self.settings}
+            """
         )
 
         async with ClientSession() as session:

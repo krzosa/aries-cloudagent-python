@@ -108,11 +108,7 @@ class ConnectionStaticResultSchema(OpenAPISchema):
 class ConnectionsListQueryStringSchema(OpenAPISchema):
     """Parameters and validators for connections list request query string."""
 
-    alias = fields.Str(
-        description="Alias",
-        required=False,
-        example="Barry",
-    )
+    alias = fields.Str(description="Alias", required=False, example="Barry",)
     initiator = fields.Str(
         description="Connection initiator",
         required=False,
@@ -144,11 +140,7 @@ class ConnectionsListQueryStringSchema(OpenAPISchema):
 class CreateInvitationQueryStringSchema(OpenAPISchema):
     """Parameters and validators for create invitation request query string."""
 
-    alias = fields.Str(
-        description="Alias",
-        required=False,
-        example="Barry",
-    )
+    alias = fields.Str(description="Alias", required=False, example="Barry",)
     auto_accept = fields.Boolean(
         description="Auto-accept connection (default as per configuration)",
         required=False,
@@ -164,11 +156,7 @@ class CreateInvitationQueryStringSchema(OpenAPISchema):
 class ReceiveInvitationQueryStringSchema(OpenAPISchema):
     """Parameters and validators for receive invitation request query string."""
 
-    alias = fields.Str(
-        description="Alias",
-        required=False,
-        example="Barry",
-    )
+    alias = fields.Str(description="Alias", required=False, example="Barry",)
     auto_accept = fields.Boolean(
         description="Auto-accept connection (defaults to configuration)",
         required=False,
@@ -224,8 +212,7 @@ def connection_sort_key(conn):
 
 
 @docs(
-    tags=["connection"],
-    summary="Query agent-to-agent connections",
+    tags=["connection"], summary="Query agent-to-agent connections",
 )
 @querystring_schema(ConnectionsListQueryStringSchema())
 @response_schema(ConnectionListSchema(), 200)
@@ -297,8 +284,7 @@ async def connections_retrieve(request: web.BaseRequest):
 
 
 @docs(
-    tags=["connection"],
-    summary="Create a new connection invitation",
+    tags=["connection"], summary="Create a new connection invitation",
 )
 @querystring_schema(CreateInvitationQueryStringSchema())
 @response_schema(InvitationResultSchema(), 200)
@@ -375,8 +361,7 @@ async def connections_create_admin_invitation_url(request: web.BaseRequest):
 
 
 @docs(
-    tags=["connection"],
-    summary="Receive a new connection invitation",
+    tags=["connection"], summary="Receive a new connection invitation",
 )
 @querystring_schema(ReceiveInvitationQueryStringSchema())
 @request_schema(ReceiveInvitationRequestSchema())
@@ -415,8 +400,7 @@ async def connections_receive_invitation(request: web.BaseRequest):
 
 
 @docs(
-    tags=["connection"],
-    summary="Accept a stored connection invitation",
+    tags=["connection"], summary="Accept a stored connection invitation",
 )
 @match_info_schema(ConnIdMatchInfoSchema())
 @querystring_schema(AcceptInvitationQueryStringSchema())
@@ -453,8 +437,7 @@ async def connections_accept_invitation(request: web.BaseRequest):
 
 
 @docs(
-    tags=["connection"],
-    summary="Accept a stored connection request",
+    tags=["connection"], summary="Accept a stored connection request",
 )
 @match_info_schema(ConnIdMatchInfoSchema())
 @querystring_schema(AcceptRequestQueryStringSchema())
@@ -619,105 +602,6 @@ async def connections_create_admin_invitation_url(request: web.BaseRequest):
     return web.json_response(result)
 
 
-import subprocess
-from ....wallet.base import BaseWallet, KeyInfo
-from ....wallet.indy import IndyWallet
-import indy.anoncreds
-import indy.did
-import indy.crypto
-import indy.wallet
-from ....messaging.jsonld.credential import sign_credential, verify_credential
-
-from indy.error import IndyError, ErrorCode
-from ....wallet.util import (
-    b58_to_bytes,
-    b64_to_bytes,
-    b64_to_str,
-    bytes_to_b58,
-    bytes_to_b64,
-    str_to_b64,
-)
-from ....pdstorage_thcf.base import BasePersonalDataStorage
-
-
-class TestSchema(OpenAPISchema):
-    connection_id = fields.Str(required=False)
-
-
-@docs(tags=["a"], summary="Test node")
-@request_schema(TestSchema())
-async def test_vs_js(request: web.BaseRequest):
-    context = request.app["request_context"]
-    body = await request.json()
-    wallet: BaseWallet = await context.inject(BaseWallet)
-    storage: BasePersonalDataStorage = await context.inject(BasePersonalDataStorage)
-
-    credential = {
-        "@context": [
-            "https://www.w3.org/2018/credentials/v1",
-            "https://www.w3.org/2018/credentials/examples/v1",
-        ],
-        "id": "https://example.com/credentials/1872",
-        "type": ["VerifiableCredential", "AlumniCredential"],
-        "issuer": "https://example.edu/issuers/565049",
-        "issuanceDate": "2010-01-01T19:23:24Z",
-        "credentialSubject": {
-            "id": "did:example:ebfeb1f712ebc6f1c276e12ec21",
-            "alumniOf": "Example University",
-        },
-    }
-
-    print("TEST")
-    identi = await storage.save(credential)
-    print(identi)
-    retrieve = await storage.read(identi)
-    print(retrieve)
-    print("TEST")
-
-    # wallet: BaseWallet = await context.inject(BaseWallet, {"wallet.type": "http"})
-    # print("WALLET TYPE: ", wallet.type)
-    # new_key: KeyInfo = await wallet.create_signing_key()
-    # print("create signing key \n", new_key)
-
-    connection_record: ConnectionRecord = await ConnectionRecord.retrieve_by_id(
-        context, body.get("connection_id")
-    )
-    keypair_verkey = connection_record.invitation_key
-
-    wallet.sign_message
-    signed = await sign_credential(
-        credential,
-        {
-            "verificationMethod": "https://example.edu/issuers/keys/1",
-            "type": "Ed25519Signature2018",
-        },
-        keypair_verkey,
-        wallet,
-    )
-    print("SIGNED ", signed)
-
-    verify = await verify_credential(signed, keypair_verkey, wallet)
-    print("VERIFIED ", verify)
-
-    # NOTE:
-    # credential_to_string = json.dumps(credential)
-    # message = str_to_b64(credential_to_string)
-    # print("BEFORE SIGN", message)
-    # signature = await wallet.sign_message(message, keypair_verkey)
-    # print("AFTER SIGN", message)
-    # print("SIGNATUREE ", signature)
-
-    # verify = await wallet.verify_message(message, signature, keypair_verkey)
-    # print("VERIFIED ", verify)
-
-    # my_info = await wallet.get_local_did(connection_record.my_did)
-    # print("connection_did \n", my_info)
-
-    return web.json_response(verify)
-
-    # subprocess.run(["node", "/home/indy/vc-test/index.js"])
-
-
 async def register(app: web.Application):
     """Register routes."""
 
@@ -725,7 +609,6 @@ async def register(app: web.Application):
         [
             web.get("/connections", connections_list, allow_head=False),
             web.get("/connections/{conn_id}", connections_retrieve, allow_head=False),
-            web.post("/test-vs", test_vs_js),
             web.post("/connections/create-static", connections_create_static),
             web.post("/connections/create-invitation", connections_create_invitation),
             web.post(

@@ -213,7 +213,7 @@ class V10CredentialOfferRequestSchema(AdminAPIMessageTracingSchema):
     )
     cred_def_id = fields.Str(
         description="Credential definition identifier",
-        required=False,
+        required=True,
         **INDY_CRED_DEF_ID,
     )
     auto_issue = fields.Bool(

@@ -792,89 +792,6 @@ async def presentation_exchange_send_free_request(request: web.BaseRequest):
 
 @docs(
     tags=["present-proof"],
-    summary="Sends a free presentation request not bound to any proposal",
-)
-@request_schema(V10PresentationSendRequestRequestSchema())
-@response_schema(V10PresentationExchangeSchema(), 200)
-async def THCFpresentation_exchange_send_free_request(request: web.BaseRequest):
-    """
-    Request handler for sending a presentation request free from any proposal.
-
-    Args:
-        request: aiohttp request object
-
-    Returns:
-        The presentation exchange details
-
-    """
-    r_time = get_timer()
-
-    context = request.app["request_context"]
-    outbound_handler = request.app["outbound_message_router"]
-
-    body = await request.json()
-
-    connection_id = body.get("connection_id")
-    try:
-        connection_record = await ConnectionRecord.retrieve_by_id(
-            context, connection_id
-        )
-    except StorageNotFoundError as err:
-        raise web.HTTPBadRequest(reason=err.roll_up) from err
-
-    if not connection_record.is_ready:
-        raise web.HTTPForbidden(reason=f"Connection {connection_id} not ready")
-
-    comment = body.get("comment")
-    indy_proof_request = body.get("proof_request")
-    if not indy_proof_request.get("nonce"):
-        indy_proof_request["nonce"] = await generate_pr_nonce()
-
-    presentation_request_message = PresentationRequest(
-        comment=comment,
-        request_presentations_attach=[
-            AttachDecorator.from_indy_dict(
-                indy_dict=indy_proof_request,
-                ident=ATTACH_DECO_IDS[PRESENTATION_REQUEST],
-            )
-        ],
-    )
-    trace_msg = body.get("trace")
-    presentation_request_message.assign_trace_decorator(
-        context.settings,
-        trace_msg,
-    )
-
-    presentation_manager = PresentationManager(context)
-    pres_ex_record = None
-    try:
-        (pres_ex_record) = await presentation_manager.create_exchange_for_request(
-            connection_id=connection_id,
-            presentation_request_message=presentation_request_message,
-        )
-        result = pres_ex_record.serialize()
-    except (BaseModelError, StorageError) as err:
-        await internal_error(
-            err,
-            web.HTTPBadRequest,
-            pres_ex_record or connection_record,
-            outbound_handler,
-        )
-
-    await outbound_handler(presentation_request_message, connection_id=connection_id)
-
-    trace_event(
-        context.settings,
-        presentation_request_message,
-        outcome="presentation_exchange_send_request.END",
-        perf_counter=r_time,
-    )
-
-    return web.json_response(result)
-
-
-@docs(
-    tags=["present-proof"],
     summary="Sends a presentation request in reference to a proposal",
 )
 @match_info_schema(PresExIdMatchInfoSchema())
@@ -1162,7 +1079,7 @@ async def register(app: web.Application):
             ),
             web.post(
                 "/present-proof/send-request",
-                THCFpresentation_exchange_send_free_request,
+                presentation_exchange_send_free_request,
             ),
             web.post(
                 "/present-proof/records/{pres_ex_id}/send-request",

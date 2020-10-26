@@ -15,4 +15,5 @@ aca-py start \
     --webhook-url ws://websocket_server$1:5000 \
     --plugin acapy_plugin_toolbox \
     --plugin services \
-    --log-level INFO
+    --log-level INFO 
+    

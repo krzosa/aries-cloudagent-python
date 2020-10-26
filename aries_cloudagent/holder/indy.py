@@ -20,10 +20,6 @@ from ..wallet.error import WalletNotFoundError
 from .base import BaseHolder, HolderError
 
 
-# Krzosa
-from .thcf_model import THCFCredential
-
-
 class IndyHolder(BaseHolder):
     """Indy holder class."""
 
@@ -266,90 +262,6 @@ class IndyHolder(BaseHolder):
 
         return tuple(creds_dict.values())[:count]
 
-    async def Originalget_credentials_for_presentation_request_by_referent(
-        self,
-        presentation_request: dict,
-        referents: Sequence[str],
-        start: int,
-        count: int,
-        extra_query: dict = {},
-    ):
-        """
-        Get credentials stored in the wallet.
-
-        Args:
-            presentation_request: Valid presentation request from issuer
-            referents: Presentation request referents to use to search for creds
-            start: Starting index
-            count: Maximum number of records to return
-            extra_query: wql query dict
-
-        """
-
-        async def fetch(reft, limit):
-            """Fetch up to limit (default smaller of all remaining or 256) creds."""
-            creds = []
-            CHUNK = min(IndyHolder.CHUNK, limit or IndyHolder.CHUNK)
-
-            with IndyErrorHandler(
-                f"Error fetching credentials from wallet for presentation request",
-                HolderError,
-            ):
-                while not limit or len(creds) < limit:
-                    batch = json.loads(
-                        await indy.anoncreds.prover_fetch_credentials_for_proof_req(
-                            search_handle, reft, CHUNK
-                        )
-                    )
-                    creds.extend(batch)
-                    if len(batch) < CHUNK:
-                        break
-            return creds
-
-        with IndyErrorHandler(
-            "Error when constructing wallet credential query", HolderError
-        ):
-            search_handle = await (
-                indy.anoncreds.prover_search_credentials_for_proof_req(
-                    self.wallet.handle,
-                    json.dumps(presentation_request),
-                    json.dumps(extra_query),
-                )
-            )
-
-            if not referents:
-                referents = (
-                    *presentation_request["requested_attributes"],
-                    *presentation_request["requested_predicates"],
-                )
-            creds_dict = OrderedDict()
-
-            try:
-                for reft in referents:
-                    # must move database cursor manually
-                    if start > 0:
-                        await fetch(reft, start)
-                    credentials = await fetch(reft, count - len(creds_dict))
-                    for cred in credentials:
-                        cred_id = cred["cred_info"]["referent"]
-                        if cred_id not in creds_dict:
-                            cred["presentation_referents"] = {reft}
-                            creds_dict[cred_id] = cred
-                        else:
-                            creds_dict[cred_id]["presentation_referents"].add(reft)
-                    if len(creds_dict) >= count:
-                        break
-            finally:
-                # Always close
-                await indy.anoncreds.prover_close_credentials_search_for_proof_req(
-                    search_handle
-                )
-
-        for cred in creds_dict.values():
-            cred["presentation_referents"] = list(cred["presentation_referents"])
-
-        return tuple(creds_dict.values())[:count]
-
     async def get_credential(self, credential_id: str) -> str:
         """
         Get a credential stored in the wallet.
@@ -453,6 +365,7 @@ class IndyHolder(BaseHolder):
             rev_states: Indy format revocation states JSON
 
         """
+
         with IndyErrorHandler("Error when constructing proof", HolderError):
             presentation_json = await indy.anoncreds.prover_create_proof(
                 self.wallet.handle,
