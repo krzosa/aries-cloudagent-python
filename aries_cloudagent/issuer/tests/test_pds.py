@@ -16,7 +16,10 @@ SCHEMA_ID = f"{TEST_DID}:2:{SCHEMA_NAME}:{SCHEMA_VERSION}"
 CRED_DEF_ID = f"{TEST_DID}:3:CL:{SCHEMA_TXN}:default"
 
 credential_test_schema = {
-    "@context": ["https://www.w3.org/2018/credentials/v1", "https://www.schema.org",],
+    "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://www.schema.org",
+    ],
     "type": [
         "VerifiableCredential",
         "@TODO should this be oca schema or what dri points to",
@@ -24,8 +27,11 @@ credential_test_schema = {
     "issuer": 1234,
     "issuanceDate": time_now(),
     "credentialSubject": {
-        "id": "TODO: Did of subject, optional",
-        "ocaSchema": {"dri": "1234", "dataDri": "1234",},
+        "id": "TODO: Did of subject",
+        "ocaSchema": {
+            "dri": "1234",
+            "dataDri": "1234",
+        },
     },
     "proof": {
         "type": "Ed25519Signature2018",
@@ -47,12 +53,20 @@ class TestPDSIssuer(AsyncTestCase):
 
     async def test_create_credential(self):
 
-        credential, _ = await self.issuer.create_credential({}, {}, {}, {})
+        credential, _ = await self.issuer.create_credential(
+            schema={"credential_type": "TestType"},
+            credential_values=credential_test_schema["credentialSubject"],
+            credential_offer={},
+            credential_request={},
+        )
         credential_dict = json.loads(credential)
 
+        # assert schema contains test schema fields
+        assert (
+            credential_dict["credentialSubject"]
+            == credential_test_schema["credentialSubject"]
+        )
         assert isinstance(credential, str)
-
-        # test schema matches test schema
         for key in credential_test_schema:
             assert credential_dict[key]
             for key_proof in credential_test_schema["proof"]:

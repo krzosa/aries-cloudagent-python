@@ -31,7 +31,7 @@ class PDSIssuer(BaseIssuer):
         Initialize an PDSIssuer instance.
 
         Args:
-            
+
 
         """
         self.wallet: BaseWallet = wallet
@@ -152,6 +152,7 @@ class PDSIssuer(BaseIssuer):
             A tuple of created credential and revocation id
 
         """
+        credential_type = schema.get("credential_type")
 
         public_did_info = await self.wallet.get_public_did()
         if public_did_info == None:
@@ -159,6 +160,8 @@ class PDSIssuer(BaseIssuer):
                 """There is no Public DID, public DID 
                 is requiered to create_credential"""
             )
+        if None or {} in [schema, credential_values]:
+            raise IssuerError("""Schema and credential_values need to be filled in""")
 
         public_did = public_did_info[0]
         credential_dict = {
@@ -179,27 +182,25 @@ class PDSIssuer(BaseIssuer):
             # for example URI = https://www.schema.org has a json
             # and that json has VerifiableCredential with all possible fields
             # which we can reach through https://www.schema.org/VerifiableCredential
-            "type": [
-                "VerifiableCredential",
-                "@TODO should this be oca schema or what dri points to",
-            ],
+            "type": ["VerifiableCredential", credential_type],
             # This should contain a machine readable document about the issuer
             # and contains info that can be used to verify the credential
             "issuer": public_did,
             "issuanceDate": time_now(),
             # the important stuff that credential proofs
-            "credentialSubject": {
-                # This should point to some info about the subject of credenial?
-                # machine readable document, about the subjecty
-                "id": "TODO: Did of subject, optional",
-                "ocaSchema": {"dri": "1234", "dataDri": "1234",},
-            },
+            "credentialSubject": credential_values
+            # "credentialSubject": {
+            #     # This should point to some info about the subject of credenial?
+            #     # machine readable document, about the subjecty
+            #     "id": "TODO: Did of subject, optional",
+            #     "ocaSchema": {
+            #         "dri": "1234",
+            #         "dataDri": "1234",
+            #     },
         }
 
-        signing_key: KeyInfo = await self.wallet.create_signing_key()
-
         credential_base64 = dictionary_to_base64(credential_dict)
-
+        signing_key: KeyInfo = await self.wallet.create_signing_key()
         signature_bytes: bytes = await self.wallet.sign_message(
             credential_base64, signing_key.verkey
         )
@@ -249,7 +250,7 @@ class PDSIssuer(BaseIssuer):
         Returns:
             Tuple with the combined revocation delta, list of cred rev ids not revoked
 
-    """
+        """
         pass
 
     async def merge_revocation_registry_deltas(
