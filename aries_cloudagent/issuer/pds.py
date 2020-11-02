@@ -5,6 +5,7 @@ from typing import Sequence, Tuple
 
 from ..wallet.crypto import sign_message, verify_signed_message
 from ..wallet.base import BaseWallet, KeyInfo
+from ..connections.models.connection_record import ConnectionRecord
 
 from .base import (
     BaseIssuer,
@@ -153,17 +154,23 @@ class PDSIssuer(BaseIssuer):
 
         """
         credential_type = schema.get("credential_type")
+        connection_record: ConnectionRecord = credential_request.get(
+            "connection_record"
+        )
 
-        public_did_info = await self.wallet.get_public_did()
-        if public_did_info == None:
+        my_did = connection_record.my_did
+        their_did = connection_record.their_did
+        if None in [my_did, their_did]:
             raise IssuerError(
-                """There is no Public DID, public DID 
-                is requiered to create_credential"""
+                f"""You don't have a established did with this connection
+                or they don't have a did, your_did {my_did}, their_did {their_did}"""
             )
-        if None or {} in [schema, credential_values]:
-            raise IssuerError("""Schema and credential_values need to be filled in""")
+        if None or {} in [schema, credential_values, connection_record]:
+            raise IssuerError(
+                f"""[schema, credential_values, connection_record] {[schema, credential_values, connection_record]} some of these need to be filled in """
+            )
 
-        public_did = public_did_info[0]
+        credential_values.update({"id": their_did})
         credential_dict = {
             # This documents should exist, those should be cached
             # it seems to be establishing a semantic context, meaning
@@ -185,14 +192,14 @@ class PDSIssuer(BaseIssuer):
             "type": ["VerifiableCredential", credential_type],
             # This should contain a machine readable document about the issuer
             # and contains info that can be used to verify the credential
-            "issuer": public_did,
+            "issuer": my_did,
             "issuanceDate": time_now(),
             # the important stuff that credential proofs
             "credentialSubject": credential_values
             # "credentialSubject": {
             #     # This should point to some info about the subject of credenial?
             #     # machine readable document, about the subjecty
-            #     "id": "TODO: Did of subject, optional",
+            #     "id": "Did of subject",
             #     "ocaSchema": {
             #         "dri": "1234",
             #         "dataDri": "1234",

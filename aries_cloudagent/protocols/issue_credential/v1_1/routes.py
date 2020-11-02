@@ -35,7 +35,7 @@ from ....utils.tracing import trace_event, get_timer, AdminAPIMessageTracingSche
 class CreateCredentialSchema(OpenAPISchema):
     credential_values = fields.Dict()
     credential_type = fields.Str()
-    connection_record = fields.Str()
+    connection_id = fields.Str()
 
 
 @docs(tags=["issue-credential"], summary="Issue credential ")
@@ -47,18 +47,33 @@ async def issue_credential(request: web.BaseRequest):
     body = await request.json()
     credential_type = body.get("credential_type")
     credential_values = body.get("credential_values")
-    connection_record = body.get("connection_record")
+    connection_id = body.get("connection_id")
 
-    if None in [credential_type, credential_values, connection_record]:
-        raise web.HTTPBadRequest(reason="Some fields are NULL")
+    if None in [credential_type, credential_values, connection_id]:
+        raise web.HTTPBadRequest(
+            reason=f"""[credential_type, credential_values, connection_id] {[credential_type, credential_values, connection_id]} Some fields need to be filled in"""
+        )
+
+    try:
+        connection_record: ConnectionRecord = await ConnectionRecord.retrieve_by_id(
+            context, connection_id
+        )
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(
+            reason="Couldnt find a connection_record through the connection_id"
+        )
 
     try:
         issuer: BaseIssuer = await context.inject(BaseIssuer)
         credential, _ = await issuer.create_credential(
-            schema={"credential_type": credential_type},
+            schema={
+                "credential_type": credential_type,
+            },
             credential_values=credential_values,
             credential_offer={},
-            credential_request={},
+            credential_request={
+                "connection_record": connection_record,
+            },
         )
     except IssuerError as err:
         raise web.HTTPError(reason=err.roll_up)

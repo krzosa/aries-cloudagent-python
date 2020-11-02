@@ -52,12 +52,12 @@ class TestPDSIssuer(AsyncTestCase):
         await self.wallet.create_public_did()
 
     async def test_create_credential(self):
-
+        connection = ConnectionRecord(my_did="1234-my", their_did="1234-their")
         credential, _ = await self.issuer.create_credential(
             schema={"credential_type": "TestType"},
             credential_values=credential_test_schema["credentialSubject"],
             credential_offer={},
-            credential_request={},
+            credential_request={"connection_record": connection},
         )
         credential_dict = json.loads(credential)
 
