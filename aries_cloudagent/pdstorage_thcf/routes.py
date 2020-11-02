@@ -264,6 +264,40 @@ async def get_storage_types(request: web.BaseRequest):
     )
 
 
+"""
+@DEBUG ENDPOINT
+"""
+from ..wallet.base import BaseWallet, KeyInfo
+from ..wallet.crypto import sign_message, verify_signed_message, bytes_to_b64
+from ..issuer.base import BaseIssuer
+
+
+async def test_keys(wallet):
+    signing_key: KeyInfo = await wallet.create_signing_key()
+    print("signing_key", signing_key)
+
+    message = b"test message"
+    message = bytes_to_b64(message).encode("ascii")
+
+    print(
+        "SIGN NACL", sign_message(message, signing_key.verkey.encode("utf-8")),
+    )
+    print(
+        "SIGN wallet", await wallet.sign_message(message, signing_key.verkey),
+    )
+
+
+@docs(
+    tags=["1Testing"], summary="Endpoint for testing",
+)
+async def testing_endpoint(request: web.BaseRequest):
+    context = request.app["request_context"]
+    wallet: BaseWallet = await context.inject(BaseWallet)
+    issuer: BaseIssuer = await context.inject(BaseIssuer)
+
+    print("Create Credential", await issuer.create_credential({}, {}, {}, {}))
+
+
 async def register(app: web.Application):
     """Register routes."""
     app.add_routes(
@@ -272,6 +306,7 @@ async def register(app: web.Application):
             web.post("/pds/settings", set_settings),
             web.post("/pds/activate", set_active_storage_type),
             web.post("/pds/get_from", get_record_from_agent,),
+            web.get("/debug/test", testing_endpoint, allow_head=False),
             web.get("/pds", get_storage_types, allow_head=False,),
             web.get("/pds/settings", get_settings, allow_head=False,),
             web.get("/pds/{payload_id}", get_record, allow_head=False,),

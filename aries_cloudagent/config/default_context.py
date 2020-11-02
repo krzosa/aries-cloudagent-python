@@ -83,8 +83,7 @@ class DefaultContextBuilder(ContextBuilder):
 
         # THCF
         context.injector.bind_provider(
-            BasePersonalDataStorage,
-            PersonalDataStorageProvider(),
+            BasePersonalDataStorage, PersonalDataStorageProvider(),
         )
 
         context.injector.bind_provider(
@@ -105,7 +104,7 @@ class DefaultContextBuilder(ContextBuilder):
             BaseIssuer,
             StatsProvider(
                 ClassProvider(
-                    "aries_cloudagent.issuer.indy.IndyIssuer",
+                    "aries_cloudagent.issuer.pds.PDSIssuer",
                     ClassProvider.Inject(BaseWallet),
                 ),
                 ("create_credential_offer", "create_credential"),
@@ -130,9 +129,7 @@ class DefaultContextBuilder(ContextBuilder):
         )
         context.injector.bind_provider(
             BaseTailsServer,
-            ClassProvider(
-                "aries_cloudagent.tails.indy_tails_server.IndyTailsServer",
-            ),
+            ClassProvider("aries_cloudagent.tails.indy_tails_server.IndyTailsServer",),
         )
 
         # Register default pack format
