@@ -23,23 +23,23 @@ from ....messaging.valid import (
     UUIDFour,
     UUID4,
 )
-from ....revocation.error import RevocationError
 from ....storage.error import StorageError, StorageNotFoundError
 from ....wallet.base import BaseWallet
 from ....issuer.base import BaseIssuer
 from ....wallet.error import WalletError
 from ....utils.outofband import serialize_outofband
 from ....utils.tracing import trace_event, get_timer, AdminAPIMessageTracingSchema
+from .messages.credential_issue import CredentialIssue
 
 
-class CreateCredentialSchema(OpenAPISchema):
+class IssueCredentialSchema(OpenAPISchema):
     credential_values = fields.Dict()
     credential_type = fields.Str()
     connection_id = fields.Str()
 
 
 @docs(tags=["issue-credential"], summary="Issue credential ")
-@request_schema(CreateCredentialSchema())
+@request_schema(IssueCredentialSchema())
 async def issue_credential(request: web.BaseRequest):
     context = request.app["request_context"]
     outbound_handler = request.app["outbound_message_router"]
@@ -62,6 +62,8 @@ async def issue_credential(request: web.BaseRequest):
         raise web.HTTPNotFound(
             reason="Couldnt find a connection_record through the connection_id"
         )
+    if not connection_record.is_ready:
+        raise web.HTTPRequestTimeout(reason="Connection with this agent is not ready")
 
     try:
         issuer: BaseIssuer = await context.inject(BaseIssuer)
@@ -77,6 +79,9 @@ async def issue_credential(request: web.BaseRequest):
         )
     except IssuerError as err:
         raise web.HTTPError(reason=err.roll_up)
+
+    issue = CredentialIssue(credential=credential)
+    await outbound_handler(issue, connection_id=connection_record.connection_id)
 
     return web.json_response(json.loads(credential))
 
