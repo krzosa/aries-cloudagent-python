@@ -1,4 +1,4 @@
-from .base import BasePersonalDataStorage
+from .base import BasePDS
 from .error import PDSNotFoundError, PDSError, PDSRecordNotFoundError
 from aiohttp import ClientSession, FormData, ClientConnectionError, ClientError
 import json
@@ -10,7 +10,7 @@ LOGGER = logging.getLogger(__name__)
 API_ENDPOINT = "/api/v1/files"
 
 
-class DataVault(BasePersonalDataStorage):
+class DataVault(BasePDS):
     def __init__(self):
         super().__init__()
         self.preview_settings = {

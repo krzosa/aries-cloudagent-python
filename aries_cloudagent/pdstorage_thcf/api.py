@@ -1,6 +1,6 @@
-from .base import BasePersonalDataStorage
+from .base import BasePDS
 from .error import PDSNotFoundError
-from .models.saved_personal_storage import SavedPersonalStorage
+from .models.saved_personal_storage import SavedPDS
 import hashlib
 import multihash
 import logging
@@ -38,7 +38,7 @@ async def match_table_query_id(context, id):
 
 async def pds_get_active_name(context):
     try:
-        active_pds = await SavedPersonalStorage.retrieve_active(context)
+        active_pds = await SavedPDS.retrieve_active(context)
     except StorageNotFoundError as err:
         raise PDSNotFoundError(f"No active pds found {err.roll_up}")
 
@@ -46,9 +46,7 @@ async def pds_get_active_name(context):
 
 
 async def pds_get_by_name(context, name):
-    pds: BasePersonalDataStorage = await context.inject(
-        BasePersonalDataStorage, {"personal_storage_type": name}
-    )
+    pds: BasePDS = await context.inject(BasePDS, {"personal_storage_type": name})
 
     return pds
 
@@ -158,6 +156,7 @@ async def pds_get_usage_policy_if_active_pds_supports_it(context):
 
 
 def encode(data: str) -> str:
+    assert_type(data, str)
     hash_object = hashlib.sha256()
     hash_object.update(bytes(data, "utf-8"))
     multi = multihash.encode(hash_object.digest(), "sha2-256")

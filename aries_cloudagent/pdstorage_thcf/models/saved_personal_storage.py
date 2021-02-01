@@ -4,7 +4,7 @@ from marshmallow import fields
 from aries_cloudagent.storage.error import StorageNotFoundError
 
 
-class SavedPersonalStorage(BaseRecord):
+class SavedPDS(BaseRecord):
     RECORD_ID_NAME = "record_id"
     RECORD_TYPE = "saved_personal_storage"
 
@@ -12,7 +12,7 @@ class SavedPersonalStorage(BaseRecord):
     INACTIVE = "inactive"
 
     class Meta:
-        schema_class = "SavedPersonalStorageSchema"
+        schema_class = "SavedPDSSchema"
 
     def __init__(
         self,
@@ -71,9 +71,9 @@ class SavedPersonalStorage(BaseRecord):
         return record[0]
 
 
-class SavedPersonalStorageSchema(BaseRecordSchema):
+class SavedPDSSchema(BaseRecordSchema):
     class Meta:
-        model_class = "SavedPersonalStorage"
+        model_class = "SavedPDS"
 
     type = fields.Str(required=False)
     name = fields.Str(required=False)

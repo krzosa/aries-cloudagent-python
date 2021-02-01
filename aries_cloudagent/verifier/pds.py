@@ -46,9 +46,11 @@ class PDSVerifier(BaseVerifier):
         )
 
         errors1 = validate_schema(
-            PresentationRequestSchema, presentation_request, self.logger.error
+            PresentationRequestSchema, presentation_request, log=self.logger.error
         )
-        errors2 = validate_schema(PresentationSchema, presentation, self.logger.error)
+        errors2 = validate_schema(
+            PresentationSchema, presentation, log=self.logger.error
+        )
         if errors1 or errors2:
             self.logger.warning(
                 f"validate_schema errors: "

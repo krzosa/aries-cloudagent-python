@@ -28,7 +28,7 @@ from ..wallet.base import BaseWallet
 from ..wallet.provider import WalletProvider
 
 
-from ..pdstorage_thcf.base import BasePersonalDataStorage
+from ..pdstorage_thcf.base import BasePDS
 from ..pdstorage_thcf.provider import PersonalDataStorageProvider
 
 
@@ -82,7 +82,7 @@ class DefaultContextBuilder(ContextBuilder):
         )
 
         context.injector.bind_provider(
-            BasePersonalDataStorage,
+            BasePDS,
             PersonalDataStorageProvider(),
         )
 

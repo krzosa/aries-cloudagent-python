@@ -11,15 +11,16 @@ from aiohttp_apispec import (
 )
 
 from marshmallow import fields, validate, Schema
-from .base import BasePersonalDataStorage
+from .base import BasePDS
 from .api import pds_load, pds_save, load_multiple
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..wallet.error import WalletError
 from ..storage.error import StorageNotFoundError, StorageError
 from .message_types import ExchangeDataA
-from .models.saved_personal_storage import SavedPersonalStorage
+from .models.saved_personal_storage import SavedPDS
 from aries_cloudagent.pdstorage_thcf.api import pds_oca_data_format_save
+import aries_cloudagent.generated_models as model
 
 
 class SaveRecordSchema(Schema):
@@ -148,26 +149,26 @@ async def set_settings(request: web.BaseRequest):
             elif scope.isnumeric():
                 scope_options = {"0": "admin", "1": "write", "2": "read"}
                 per_type_setting["scope"] = scope_options.get(scope, "")
+        if scope is None:
+            per_type_setting["scope"] = None
 
         # create or update a saved pds
         try:
-            saved_pds = await SavedPersonalStorage.retrieve_type_name(
-                context, type, instance_name
-            )
+            saved_pds = await SavedPDS.retrieve_type_name(context, type, instance_name)
             saved_pds.settings = per_type_setting
         except StorageNotFoundError:
-            saved_pds = SavedPersonalStorage(
+            saved_pds = SavedPDS(
                 type=type,
                 name=instance_name,
-                state=SavedPersonalStorage.INACTIVE,
+                state=SavedPDS.INACTIVE,
                 settings=per_type_setting,
             )
 
         await saved_pds.save(context)
 
         # update active pds instances with new settings
-        personal_storage: BasePersonalDataStorage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": (type, instance_name)}
+        personal_storage: BasePDS = await context.inject(
+            BasePDS, {"personal_storage_type": (type, instance_name)}
         )
         personal_storage.settings.update(per_type_setting)
         connected, exception = await personal_storage.ping()
@@ -184,11 +185,12 @@ async def set_settings(request: web.BaseRequest):
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types and show their configuration",
 )
+@response_schema(model.PDSGetSettingsSchemaResponse)
 async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
 
     try:
-        saved_pds = await SavedPersonalStorage.query(context)
+        saved_pds = await SavedPDS.query(context)
         assert isinstance(saved_pds, list), f"not list {saved_pds}, {type(saved_pds)}"
         print("get_settings saved_pds:", saved_pds)
     except StorageError as err:
@@ -202,6 +204,45 @@ async def get_settings(request: web.BaseRequest):
     return web.json_response(response_message)
 
 
+async def pds_activate(context, pds_type, instance_name="default"):
+    check_if_storage_type_is_registered = context.settings.get_value(
+        "personal_storage_registered_types"
+    )
+
+    if check_if_storage_type_is_registered is None:
+        raise web.HTTPNotFound(reason="List of PDSes is not initialized!")
+
+    check_if_storage_type_is_registered = check_if_storage_type_is_registered.get(
+        pds_type
+    )
+
+    if check_if_storage_type_is_registered is None:
+        raise web.HTTPNotFound(
+            reason="Chosen type is not in the registered list, "
+            "make sure there are no typos!"
+            "Use GET settings to look for registered types"
+        )
+
+    try:
+        pds_to_activate = await SavedPDS.retrieve_type_name(
+            context, pds_type, instance_name
+        )
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(reason="Couldn't find PDS " + err.roll_up)
+
+    try:
+        active_pds = await SavedPDS.retrieve_active(context)
+
+    except StorageNotFoundError as err:
+        raise web.HTTPNotFound(reason="Couldn't find active PDS " + err.roll_up)
+
+    active_pds.state = SavedPDS.INACTIVE
+    pds_to_activate.state = SavedPDS.ACTIVE
+
+    await active_pds.save(context)
+    await pds_to_activate.save(context)
+
+
 @docs(
     tags=["PersonalDataStorage"],
     summary="Set a public data storage type by name",
@@ -212,37 +253,13 @@ async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
     instance_name = request.query.get("optional_name", "default")
     pds_type = request.query.get("type", None)
-
-    check_if_storage_type_is_registered = context.settings.get_value(
-        "personal_storage_registered_types"
-    ).get(pds_type)
-
-    if check_if_storage_type_is_registered == None:
-        raise web.HTTPNotFound(
-            reason="Chosen type is not in the registered list, make sure there are no typos! Use GET settings to look for registered types"
-        )
-
-    try:
-        pds_to_activate = await SavedPersonalStorage.retrieve_type_name(
-            context, pds_type, instance_name
-        )
-    except StorageNotFoundError as err:
-        raise web.HTTPNotFound(reason="Couldn't find this storage" + err.roll_up)
-
-    try:
-        active_pds = await SavedPersonalStorage.retrieve_active(context)
-
-    except StorageNotFoundError as err:
-        raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
-
-    active_pds.state = SavedPersonalStorage.INACTIVE
-    pds_to_activate.state = SavedPersonalStorage.ACTIVE
-
-    await active_pds.save(context)
-    await pds_to_activate.save(context)
+    await pds_activate(context, pds_type, instance_name)
 
     return web.json_response(
-        {"success": True, "success_type_exists": f"{pds_type}, {instance_name}"}
+        {
+            "success": True,
+            "message": f"PDS of type{pds_type}, {instance_name} set succesfully",
+        }
     )
 
 
@@ -256,14 +273,14 @@ async def get_storage_types(request: web.BaseRequest):
     instance_name = "default"
 
     try:
-        active_pds = await SavedPersonalStorage.retrieve_active(context)
+        active_pds = await SavedPDS.retrieve_active(context)
     except StorageNotFoundError as err:
         raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
 
     registered_type_names = {}
     for key in registered_types:
         personal_storage = await context.inject(
-            BasePersonalDataStorage, {"personal_storage_type": (key, instance_name)}
+            BasePDS, {"personal_storage_type": (key, instance_name)}
         )
         registered_type_names[key] = personal_storage.preview_settings
 

@@ -69,7 +69,7 @@ async def create_test_credential(issuer):
         credential_offer={},
         credential_request={"connection_record": connection},
     )
-    credential_dict = json.loads(credential)
+    credential_dict = json.loads(credential, object_pairs_hook=OrderedDict)
 
     assert credential_dict.get("proof") != None
     assert credential_dict["credentialSubject"] == test_cred["credentialSubject"]

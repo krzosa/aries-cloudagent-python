@@ -1,4 +1,4 @@
-from .base import BasePersonalDataStorage
+from .base import BasePDS
 from .api import encode
 from .error import PDSError, PDSRecordNotFoundError
 
@@ -34,7 +34,7 @@ def get_delimiter(parameter_count_in):
         return "&"
 
 
-class OwnYourDataVault(BasePersonalDataStorage):
+class OwnYourDataVault(BasePDS):
     def __init__(self):
         super().__init__()
         self.api_url = None
