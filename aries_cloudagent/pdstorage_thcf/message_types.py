@@ -11,7 +11,6 @@ MESSAGE_TYPES = {
 
 # MESSAGE CLASSES
 
-from typing import Sequence
 from marshmallow import fields
 from ..messaging.agent_message import AgentMessage, AgentMessageSchema
 
