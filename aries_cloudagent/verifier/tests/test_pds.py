@@ -1,19 +1,7 @@
-import json
-import pytest
-
-from copy import deepcopy
-
 from asynctest import TestCase as AsyncTestCase
-from asynctest import mock as async_mock
 from aries_cloudagent.wallet.basic import BasicWallet
 from aries_cloudagent.config.injection_context import InjectionContext
-from aries_cloudagent.wallet.base import BaseWallet
 from ..pds import PDSVerifier
-import collections
-from aries_cloudagent.storage.basic import BasicStorage
-from aries_cloudagent.issuer.pds import PDSIssuer
-from aries_cloudagent.holder.pds import PDSHolder
-from aries_cloudagent.issuer.tests.test_pds import create_test_credential
 from collections import OrderedDict
 
 pres = OrderedDict(

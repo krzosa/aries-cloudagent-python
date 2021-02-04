@@ -2,6 +2,7 @@
 
 from abc import ABC, ABCMeta, abstractmethod
 from typing import Sequence, Tuple
+from collections import OrderedDict
 
 from ..core.error import BaseError
 
@@ -136,6 +137,26 @@ class BaseIssuer(ABC, metaclass=ABCMeta):
 
         Returns:
             A tuple of created credential and revocation id
+
+        """
+
+    @abstractmethod
+    async def create_credential_ex(
+        self,
+        credential_values,
+        credential_type: str or list = None,
+        subject_public_did: str = None,
+    ) -> OrderedDict:
+        """
+        Create a credential.
+
+        Args
+            credential_values - dict which contains the credential content
+            credential_type - additional credential type
+            subject_public_did - did of the agent which credential_values describe
+
+        Returns:
+            created credential
 
         """
 

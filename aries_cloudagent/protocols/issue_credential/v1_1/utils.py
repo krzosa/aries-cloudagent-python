@@ -5,7 +5,7 @@ from aries_cloudagent.protocols.issue_credential.v1_1.models.credential_exchange
     CredentialExchangeRecord,
 )
 from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
-from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
+from aries_cloudagent.aathcf.credentials import assert_type
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -83,42 +83,12 @@ async def create_credential(
     try:
         issuer: BaseIssuer = await context.inject(BaseIssuer)
         credential, _ = await issuer.create_credential(
-            schema={
-                "credential_type": credential_type,
-            },
-            credential_values=credential_values,
-            credential_offer={},
-            credential_request={},
-        )
-    except IssuerError as err:
-        raise exception(reason=f"""create_credential: {err.roll_up}""")
-
-    return credential
-
-
-async def create_credential_a(
-    context,
-    credential_type,
-    credential_values,
-    *,
-    their_public_did: str = None,
-    exception=web.HTTPInternalServerError,
-) -> dict:
-
-    if isinstance(their_public_did, str):
-        credential_values.update({"subject_id": their_public_did})
-    else:
-        LOGGER.warn("Invalid type of their public did")
-
-    try:
-        issuer: BaseIssuer = await context.inject(BaseIssuer)
-        credential, _ = await issuer.create_credential(
             schema={"credential_type": credential_type},
             credential_values=credential_values,
             credential_offer={},
             credential_request={},
         )
     except IssuerError as err:
-        raise exception(reason=f"create_credential: {err.roll_up}")
+        raise exception(reason=f"""create_credential: {err.roll_up}""")
 
     return credential

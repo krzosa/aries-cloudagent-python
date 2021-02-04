@@ -5,16 +5,14 @@ import json
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
-    match_info_schema,
     querystring_schema,
     request_schema,
-    response_schema,
 )
 from marshmallow import fields
 from ....connections.models.connection_record import ConnectionRecord
 from ....holder.base import BaseHolder, HolderError
 from .models.presentation_exchange import THCFPresentationExchange
-from ....messaging.models.openapi import OpenAPISchema, Schema
+from ....messaging.models.openapi import OpenAPISchema
 from aries_cloudagent.protocols.issue_credential.v1_1.utils import retrieve_connection
 from .messages.request_proof import RequestProof
 from .messages.present_proof import PresentProof
@@ -24,21 +22,15 @@ from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
     pds_load,
     pds_oca_data_format_save,
-    pds_save,
     pds_save_a,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
-from aries_cloudagent.protocols.issue_credential.v1_1.utils import (
-    create_credential,
-    create_credential_a,
-)
 from aries_cloudagent.protocols.issue_credential.v1_1.routes import (
     routes_get_public_did,
 )
-
+from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
 from .messages.acknowledge_proof import AcknowledgeProof
-from collections import OrderedDict
 
 LOGGER = logging.getLogger(__name__)
 
@@ -196,22 +188,26 @@ async def acknowledge_proof(request: web.BaseRequest):
         context, exchange.connection_id
     )
 
-    credential = await create_credential_a(
-        context,
-        credential_type="ProofAcknowledgment",
-        credential_values={
-            "oca_data": {
-                "verified": str(query.get("status")),
-                "presentation_dri": exchange.presentation_dri,
-                "issuer_name": context.settings.get("default_label"),
+    try:
+        issuer: BaseIssuer = await context.inject(BaseIssuer)
+        credential = await issuer.create_credential_ex(
+            credential_values={
+                "oca_data": {
+                    "verified": str(query.get("status")),
+                    "presentation_dri": exchange.presentation_dri,
+                    "issuer_name": context.settings.get("default_label"),
+                },
+                "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
             },
-            "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
-        },
-        their_public_did=exchange.prover_public_did,
-        exception=web.HTTPInternalServerError,
-    )
+            credential_type="ProofAcknowledgment",
+            subject_public_did=exchange.prover_public_did,
+        )
+    except IssuerError as err:
+        raise web.HTTPInternalServerError(
+            reason=f"Error occured while creating a credential {err.roll_up}"
+        )
 
-    message = AcknowledgeProof(credential=credential)
+    message = AcknowledgeProof(credential=json.dumps(credential))
     message.assign_thread_id(exchange.thread_id)
     await outbound_handler(message, connection_id=connection_record.connection_id)
 

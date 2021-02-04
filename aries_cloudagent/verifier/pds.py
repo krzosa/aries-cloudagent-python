@@ -52,10 +52,9 @@ class PDSVerifier(BaseVerifier):
             PresentationSchema, presentation, log=self.logger.error
         )
         if errors1 or errors2:
-            self.logger.warning(
-                f"validate_schema errors: "
-                f"presentation_request: {errors1}"
-                f"presentation:         {errors2}"
+            self.logger.error(
+                f"presentation_request errors: {errors1} "
+                f"presentation errors: {errors2} "
             )
             return False
 
