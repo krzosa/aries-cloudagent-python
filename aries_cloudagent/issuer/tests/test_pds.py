@@ -123,6 +123,7 @@ class TestPDSIssuer(AsyncTestCase):
         credential_ex = await self.issuer.create_credential_ex(
             test_cred["credentialSubject"], "TestType"
         )
+        credential_ex = json.loads(credential_ex)
         credential = await create_test_credential(self.issuer)
 
         assert credential["credentialSubject"] == credential_ex["credentialSubject"]

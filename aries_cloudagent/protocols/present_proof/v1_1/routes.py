@@ -207,7 +207,7 @@ async def acknowledge_proof(request: web.BaseRequest):
             reason=f"Error occured while creating a credential {err.roll_up}"
         )
 
-    message = AcknowledgeProof(credential=json.dumps(credential))
+    message = AcknowledgeProof(credential=credential)
     message.assign_thread_id(exchange.thread_id)
     await outbound_handler(message, connection_id=connection_record.connection_id)
 

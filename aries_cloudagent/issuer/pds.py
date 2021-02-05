@@ -133,84 +133,15 @@ class PDSIssuer(BaseIssuer):
         revoc_reg_id: str = None,
         tails_file_path: str = None,
     ) -> Tuple[str, str]:
-        """
-        Create a credential.
-
-        Args
-            schema: Schema to create credential for
-            credential_offer: Credential Offer to create credential for
-            credential_request: Credential request to create credential for
-            credential_values: Values to go in credential
-            revoc_reg_id: ID of the revocation registry
-            tails_file_path: Path to the local tails file
-
-        Returns:
-            A tuple of created credential and revocation id
-
-        """
-        credential_type = schema.get("credential_type")
-
-        my_did = await self.wallet.get_public_did()
-        raise_exception_on_null(schema, "input schema")
-        if not isinstance(my_did, DIDInfo) or my_did[0] is None:
-            raise IssuerError("Public did is not registered!")
-        if not isinstance(credential_values, dict) or credential_values == {}:
-            raise IssuerError("credential_values is Null")
-
-        my_did = my_did[0]
-
-        credential_dict = OrderedDict()
-        # TODO: Point to some OCA Credential schema
-
-        # This documents should exist, those should be cached
-        # it seems to be establishing a semantic context, meaning
-        # that it contains explanations of what credential fields mean
-        # and what credential fields and types are possible
-        # We should create it and it should be unchanging so that you can
-        # cache it
-        # if words in context overlapp, we should read the contexts from
-        # top to bottom, so that later contexts overwrite earlier contexts
-        credential_dict["context"] = [
-            "https://www.w3.org/2018/credentials/v1",
-            "https://www.schema.org",
-        ]
-
-        # This partly seems to be an extension of context
-        # for example URI = https://www.schema.org has a json
-        # and that json has VerifiableCredential with all possible fields
-        # which we can reach through https://www.schema.org/VerifiableCredential
-        credential_dict["type"] = ["VerifiableCredential"]
-        if isinstance(credential_type, str) and credential_type != "":
-            credential_dict["type"].append(credential_type)
-        elif isinstance(credential_type, list) and credential_type != []:
-            credential_dict["type"].extend(credential_type)
-
-        credential_dict["issuer"] = my_did
-        credential_dict["issuanceDate"] = time_now()
-        credential_dict["credentialSubject"] = credential_values
-        # "credentialSubject": {
-        #     # This should point to some info about the subject of credenial?
-        #     # machine readable document, about the subjecty
-        #     "id": "Did of subject",
-        #     "ocaSchema": {
-        #         "dri": "1234",
-        #         "dataDri": "1234",
-        #     },
-        credential_dict["proof"] = await create_proof(
-            self.wallet, credential_dict, IssuerError
-        )
-        validate_schema(
-            CredentialSchema, credential_dict, IssuerError, self.logger.error
-        )
-
-        return json.dumps(credential_dict), None
+        credential = await self.create_credential_ex(credential_values, schema.get("credential_type"))
+        return [credential, None]
 
     async def create_credential_ex(
         self,
         credential_values,
         credential_type: str or list = None,
         subject_public_did: str = None,
-    ) -> OrderedDict:
+    ) -> str:
         my_did = await self.wallet.get_public_did()
         if not isinstance(my_did, DIDInfo) or my_did[0] is None:
             raise IssuerError("Public did is not registered!")
@@ -267,7 +198,7 @@ class PDSIssuer(BaseIssuer):
             CredentialSchema, credential_dict, IssuerError, self.logger.error
         )
 
-        return credential_dict
+        return json.dumps(credential_dict)
 
     async def revoke_credentials(
         self, revoc_reg_id: str, tails_file_path: str, cred_revoc_ids: Sequence[str]

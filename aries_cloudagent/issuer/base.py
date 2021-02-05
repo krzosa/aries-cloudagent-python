@@ -146,7 +146,7 @@ class BaseIssuer(ABC, metaclass=ABCMeta):
         credential_values,
         credential_type: str or list = None,
         subject_public_did: str = None,
-    ) -> OrderedDict:
+    ) -> str:
         """
         Create a credential.
 
