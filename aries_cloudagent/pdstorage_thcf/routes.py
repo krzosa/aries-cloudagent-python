@@ -20,11 +20,7 @@ from ..storage.error import StorageNotFoundError, StorageError
 from .message_types import ExchangeDataA
 from .models.saved_personal_storage import SavedPDS
 from aries_cloudagent.pdstorage_thcf.api import pds_oca_data_format_save
-import aries_cloudagent.generated_models as model
-
-
-class SaveRecordSchema(Schema):
-    payload = fields.Str(required=True)
+import aries_cloudagent.generated_models as Model
 
 
 class SetActiveStorageTypeSchema(Schema):
@@ -49,7 +45,8 @@ class GetSettingsSchema(Schema):
 
 
 @docs(tags=["PersonalDataStorage"], summary="Save data in a public data storage")
-@request_schema(SaveRecordSchema())
+@request_schema(Model.Payload)
+@response_schema(Model.DRIResponse)
 async def save_record(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
@@ -185,7 +182,7 @@ async def set_settings(request: web.BaseRequest):
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types and show their configuration",
 )
-@response_schema(model.PDSGetSettingsSchemaResponse)
+@response_schema(Model.PDSGetSettingsSchemaResponse)
 async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
 
@@ -249,6 +246,7 @@ async def pds_activate(context, pds_type, instance_name="default"):
     description="for example: 'local', get possible types by calling 'GET /pds' endpoint",
 )
 @querystring_schema(SetActiveStorageTypeSchema())
+@response_schema(Model.DRIResponse)
 async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
     instance_name = request.query.get("optional_name", "default")
@@ -267,6 +265,7 @@ async def set_active_storage_type(request: web.BaseRequest):
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types, get which storage_type is active",
 )
+@response_schema(Model.PDSResponse)
 async def get_storage_types(request: web.BaseRequest):
     context = request.app["request_context"]
     registered_types = context.settings.get("personal_storage_registered_types")
@@ -382,7 +381,7 @@ class PostMultipleRecordsForOcaSchema(Schema):
     }
     """,
 )
-@request_schema(PostMultipleRecordsForOcaSchema)
+@request_schema(Model.PDSPostCurrent)
 async def post_multiple_records_for_oca_form_filling(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()

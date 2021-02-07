@@ -181,20 +181,3 @@ async def pds_oca_data_format_save(context, data):
             ] = "Invalid format, DRIs should start with 'DRI:'"
 
     return ids_of_saved_schemas
-
-
-async def pds_oca_data_format_serialize_item_recursive(context, key, val):
-    new_val = val
-    if isinstance(val, dict):
-        new_val = await pds_oca_data_format_serialize_dict_recursive(context, val)
-    elif val.startswith("DRI:"):
-        new_val = await pds_load(context, val[4:])
-        new_val = await pds_oca_data_format_serialize_dict_recursive(context, new_val)
-    return new_val
-
-
-async def pds_oca_data_format_serialize_dict_recursive(context, dct):
-    new_dict = {}
-    for k, v in dct.items():
-        new_dict[k] = await pds_oca_data_format_serialize_item_recursive(context, k, v)
-    return new_dict
