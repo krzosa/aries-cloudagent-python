@@ -20,9 +20,6 @@ from .models.utils import retrieve_exchange
 import logging
 from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
-    pds_load,
-    pds_oca_data_format_save,
-    pds_save_a,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
@@ -230,37 +227,6 @@ class DebugEndpointSchema(OpenAPISchema):
     oca_data = fields.List(fields.Str())
 
 
-@docs(tags=["PersonalDataStorage"])
-@querystring_schema(DebugEndpointSchema)
-async def debug_endpoint(request: web.BaseRequest):
-    context = request.app["request_context"]
-
-    data = {"data": "data"}
-    payload_id = await pds_save_a(context, data, oca_schema_dri="12345", table="test")
-    ret = await pds_load(context, payload_id)
-    assert ret == data
-
-    # body = await request.json()
-    # oca_data = body["oca_data"]
-    # print(oca_data)
-
-    data = {
-        "DRI:12345": {"t": "o", "p": {"address": "DRI:123456", "test_value": "ok"}},
-        "DRI:123456": {
-            "t": "o",
-            "p": {"second_dri": "DRI:1234567", "test_value": "ok"},
-        },
-        "DRI:1234567": {"t": "o", "p": {"third_dri": "DRI:123456", "test_value": "ok"}},
-        "1234567": {"t": "o", "p": {"third_dri": "DRI:123456", "test_value": "ok"}},
-    }
-
-    ids = await pds_oca_data_format_save(context, data)
-    # serialized = await pds_oca_data_format_serialize_dict_recursive(context, data)
-    multiple = await load_multiple(context, oca_schema_base_dri=["12345", "123456"])
-
-    return web.json_response({"success": True, "result": ids, "multiple": multiple})
-
-
 @docs(tags=["present-proof"], summary="retrieve exchange record")
 @querystring_schema(RetrieveExchangeQuerySchema())
 async def retrieve_credential_exchange_api(request: web.BaseRequest):
@@ -340,7 +306,6 @@ async def register(app: web.Application):
                 retrieve_credential_exchange_api,
                 allow_head=False,
             ),
-            web.post("/present-proof/debug", debug_endpoint),
         ]
     )
 

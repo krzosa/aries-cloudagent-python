@@ -1,25 +1,20 @@
-import logging
-import json
-
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
-    match_info_schema,
     querystring_schema,
     request_schema,
     response_schema,
 )
 
-from marshmallow import fields, validate, Schema
+from marshmallow import Schema, fields
 from .base import BasePDS
-from .api import pds_load, pds_save, load_multiple
+from .api import pds_load, pds_save, load_multiple, pds_save_a
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..wallet.error import WalletError
 from ..storage.error import StorageNotFoundError, StorageError
 from .message_types import ExchangeDataA
 from .models.saved_personal_storage import SavedPDS
-from aries_cloudagent.pdstorage_thcf.api import pds_oca_data_format_save
 import aries_cloudagent.generated_models as Model
 
 
@@ -44,7 +39,7 @@ class GetSettingsSchema(Schema):
     )
 
 
-@docs(tags=["PersonalDataStorage"], summary="Save data in a public data storage")
+@docs(tags=["Personal Data Storage"], summary="Save data in a public data storage")
 @request_schema(Model.Payload)
 @response_schema(Model.DRIResponse)
 async def save_record(request: web.BaseRequest):
@@ -60,9 +55,10 @@ async def save_record(request: web.BaseRequest):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Retrieve data from a public data storage using data id",
 )
+@response_schema(Model.Payload)
 async def get_record(request: web.BaseRequest):
     context = request.app["request_context"]
     payload_id = request.match_info["payload_id"]
@@ -72,27 +68,38 @@ async def get_record(request: web.BaseRequest):
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
-    return web.json_response({"success": True, "payload": result})
+    return web.json_response({"payload": result})
+
+
+async def pds_request_record_from_other_agent(
+    context, connection_id, payload_id, outbound_handler
+):
+    await ConnectionRecord.retrieve_by_id(context, connection_id)
+    message = ExchangeDataA(payload_dri=payload_id)
+    await outbound_handler(message, connection_id=connection_id)
+
+
+async def pds_request_record_from_other_agent_ex(request, connection_id, payload_id):
+    context = request.app["request_context"]
+    outbound_handler = request.app["outbound_message_router"]
+    await pds_request_record_from_other_agent(
+        context, connection_id, payload_id, outbound_handler
+    )
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Retrieve data from a public data storage using data id",
 )
 @querystring_schema(GetRecordFromAgentSchema())
 async def get_record_from_agent(request: web.BaseRequest):
-    context = request.app["request_context"]
     connection_id = request.query.get("connection_id")
     payload_id = request.query.get("payload_id")
-
     try:
-        await ConnectionRecord.retrieve_by_id(context, connection_id)
-    except (WalletError, StorageError) as err:
-        raise web.HTTPBadRequest(reason=err.roll_up) from err
+        await pds_request_record_from_other_agent_ex(request, connection_id, payload_id)
+    except StorageNotFoundError:
+        raise web.HTTPNotFound(reason="Connection not found")
 
-    outbound_handler = request.app["outbound_message_router"]
-    message = ExchangeDataA(payload_dri=payload_id)
-    await outbound_handler(message, connection_id=connection_id)
     return web.json_response({"success": True})
 
 
@@ -175,14 +182,14 @@ async def set_settings(request: web.BaseRequest):
         if exception is not None:
             user_msg[type]["exception"] = exception
 
-    return web.json_response({"success": "True", "status": user_msg})
+    return web.json_response(user_msg)
 
 
 @docs(
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types and show their configuration",
 )
-@response_schema(Model.PDSGetSettingsSchemaResponse)
+@response_schema(Model.ArrayOfPDSSettings)
 async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
 
@@ -197,7 +204,6 @@ async def get_settings(request: web.BaseRequest):
     for pds in saved_pds:
         response_message.update({f"{pds.type}, {pds.name}": pds.settings})
 
-    # TODO "success": True,
     return web.json_response(response_message)
 
 
@@ -246,7 +252,6 @@ async def pds_activate(context, pds_type, instance_name="default"):
     description="for example: 'local', get possible types by calling 'GET /pds' endpoint",
 )
 @querystring_schema(SetActiveStorageTypeSchema())
-@response_schema(Model.DRIResponse)
 async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
     instance_name = request.query.get("optional_name", "default")
@@ -255,8 +260,7 @@ async def set_active_storage_type(request: web.BaseRequest):
 
     return web.json_response(
         {
-            "success": True,
-            "message": f"PDS of type{pds_type}, {instance_name} set succesfully",
+            "message": f"PDS of type ({pds_type}, {instance_name}) set succesfully",
         }
     )
 
@@ -265,7 +269,7 @@ async def set_active_storage_type(request: web.BaseRequest):
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types, get which storage_type is active",
 )
-@response_schema(Model.PDSResponse)
+# @response_schema(Model.PDSResponse)
 async def get_storage_types(request: web.BaseRequest):
     context = request.app["request_context"]
     registered_types = context.settings.get("personal_storage_registered_types")
@@ -285,8 +289,7 @@ async def get_storage_types(request: web.BaseRequest):
 
     return web.json_response(
         {
-            "success": True,
-            "active": f"{active_pds.type}, {active_pds.name}",
+            "active_pds": f"{active_pds.type}, {active_pds.name}",
             "types": registered_type_names,
         }
     )
@@ -325,7 +328,7 @@ class GetMultipleRecordsForOcaSchema(Schema):
     tags=["PersonalDataStorage"],
 )
 @querystring_schema(GetMultipleRecordsForOcaSchema)
-async def get_multiple_records_for_oca_form_filling(request: web.BaseRequest):
+async def get_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     dri_list = request.query
     dri_list = dri_list.getall("oca_schema_base_dris")
@@ -342,47 +345,25 @@ class PostMultipleRecordsForOcaSchema(Schema):
     data = fields.Dict(keys=fields.Str(), values=fields.Dict())
 
 
+async def pds_oca_data_format_save(context, data):
+    for record in data:
+        payload_id = await pds_save_a(
+            context,
+            record["data"],
+            oca_schema_dri=record["dri"],
+        )
+        record["payload_id"] = payload_id
+        record.pop("data", None)
+
+    return data
+
+
 @docs(
     tags=["PersonalDataStorage"],
     summary="Post data in bulk",
-    description="""
-    Example input:
-    {
-        "data":{
-            "DRI:12345":{
-                "t":"o",
-                "p":{
-                    "address":"DRI:123456",
-                    "test_value":"ok"
-                }
-            },
-            "DRI:123456":{
-                "t":"o",
-                "p":{
-                    "second_dri":"DRI:1234567",
-                    "test_value":"ok"
-                }
-            },
-            "DRI:1234567":{
-                "t":"o",
-                "p":{
-                    "third_dri":"DRI:123456",
-                    "test_value":"ok"
-                }
-            },
-            "1234567":{
-                "t":"o",
-                "p":{
-                    "third_dri":"DRI:123456",
-                    "test_value":"ok"
-                }
-            }
-        }
-    }
-    """,
 )
-@request_schema(Model.PDSPostCurrent)
-async def post_multiple_records_for_oca_form_filling(request: web.BaseRequest):
+@request_schema(Model.ArrayOfOCASchemaChunks)
+async def post_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
     data = body.get("data")
@@ -392,12 +373,7 @@ async def post_multiple_records_for_oca_form_filling(request: web.BaseRequest):
     except PDSError as err:
         raise web.HTTPInternalServerError(err)
 
-    return web.json_response({"success": True, "result": result})
-
-
-# @docs(tags=["Swagger"], summary="Get agent's swagger schema in json format")
-# async def get_swagger_schema(request: web.BaseRequest):
-#     return web.json_response(request.app._state["swagger_dict"])
+    return web.json_response(result)
 
 
 async def register(app: web.Application):
@@ -427,14 +403,13 @@ async def register(app: web.Application):
                 allow_head=False,
             ),
             web.get(
-                "/pds/current/",
-                get_multiple_records_for_oca_form_filling,
+                "/pds/oca-schema-chunks/",
+                get_oca_schema_chunks,
                 allow_head=False,
             ),
             web.post(
-                "/pds/current/",
-                post_multiple_records_for_oca_form_filling,
+                "/pds/oca-schema-chunks/",
+                post_oca_schema_chunks,
             ),
-            # web.get("/swagger", get_swagger_schema, allow_head=False),
         ]
     )

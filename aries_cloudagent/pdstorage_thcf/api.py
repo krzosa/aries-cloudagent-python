@@ -163,21 +163,3 @@ def encode(data: str) -> str:
     result = multibase.encode("base58btc", multi)
 
     return result.decode("utf-8")
-
-
-async def pds_oca_data_format_save(context, data):
-    ids_of_saved_schemas = {}
-    for oca_schema_base_dri in data:
-        if oca_schema_base_dri.startswith("DRI:"):
-            payload_id = await pds_save_a(
-                context,
-                data[oca_schema_base_dri],
-                oca_schema_dri=oca_schema_base_dri[4:],
-            )
-            ids_of_saved_schemas[oca_schema_base_dri] = payload_id
-        else:
-            ids_of_saved_schemas[
-                oca_schema_base_dri
-            ] = "Invalid format, DRIs should start with 'DRI:'"
-
-    return ids_of_saved_schemas
