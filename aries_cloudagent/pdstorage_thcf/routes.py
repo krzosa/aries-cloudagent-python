@@ -8,10 +8,9 @@ from aiohttp_apispec import (
 
 from marshmallow import Schema, fields
 from .base import BasePDS
-from .api import pds_load, pds_save, load_multiple, pds_save_a
+from .api import load_multiple, pds_load, pds_save, pds_save_chunks
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
-from ..wallet.error import WalletError
 from ..storage.error import StorageNotFoundError, StorageError
 from .message_types import ExchangeDataA
 from .models.saved_personal_storage import SavedPDS
@@ -103,44 +102,15 @@ async def get_record_from_agent(request: web.BaseRequest):
     return web.json_response({"success": True})
 
 
-@docs(
-    tags=["PersonalDataStorage"],
-    summary="Set and configure current PersonalDataStorage",
-    description="""
-    Example of a correct schema:
-    {
-        "settings":
-        {
-            "local": {
-                "optional_instance_name: "default",
-                "no_configuration_needed": "yes-1234"
-            },
-            "data_vault": {
-                "optional_instance_name: "not_default",
-                "no_configuration_needed": "yes-1234"
-            },
-            "own_your_data": {
-                "client_id": "test-1234",
-                "client_secret": "test-1234",
-                "grant_type": "client_credentials"
-            }
-        }
-    }
-    """,
-)
-@request_schema(SaveSettingsSchema())
-async def set_settings(request: web.BaseRequest):
-    context = request.app["request_context"]
-    body = await request.json()
-    settings: dict = body.get("settings", None)
+async def pds_set_settings(context, settings: dict):
+    """
+    Get all pds configurations from the user's input json
+    and either update all specified instances or create new instances
+    for types which are not existent
+    """
+    assert isinstance(settings, dict) and settings is not {}
 
-    if settings is None:
-        raise web.HTTPNotFound(reason="Settings schema is empty")
-
-    # get all pds configurations from the user's input json
-    # and either update all specified instances or create new instances
-    # for types which are not existent
-    user_msg = {}
+    user_message = {}
     for type in settings:
         per_type_setting = settings.get(type)
         instance_name = per_type_setting.get("optional_instance_name", "default")
@@ -177,12 +147,53 @@ async def set_settings(request: web.BaseRequest):
         personal_storage.settings.update(per_type_setting)
         connected, exception = await personal_storage.ping()
 
-        user_msg[type] = {}
-        user_msg[type]["connected"] = connected
+        user_message[type] = {}
+        user_message[type]["connected"] = connected
         if exception is not None:
-            user_msg[type]["exception"] = exception
+            user_message[type]["exception"] = exception
 
-    return web.json_response(user_msg)
+    return user_message
+
+
+@docs(
+    tags=["PersonalDataStorage"],
+    summary="Set and configure current PersonalDataStorage",
+    description="""
+    Example of a correct schema:
+    {
+        "settings":
+        {
+            "local": {
+                "optional_instance_name: "default",
+                "no_configuration_needed": "yes-1234"
+            },
+            "data_vault": {
+                "optional_instance_name: "not_default",
+                "no_configuration_needed": "yes-1234"
+            },
+            "own_your_data": {
+                "client_id": "test-1234",
+                "client_secret": "test-1234",
+                "grant_type": "client_credentials"
+            }
+        }
+    }
+    """,
+)
+@request_schema(SaveSettingsSchema())
+async def set_settings(request: web.BaseRequest):
+    context = request.app["request_context"]
+    body = await request.json()
+    settings: dict = body.get("settings", None)
+    if settings is None:
+        raise web.HTTPNotFound(reason="Settings schema is empty")
+
+    try:
+        user_message = await pds_set_settings(context, settings)
+    except PDSError as err:
+        raise web.HTTPInternalServerError(reason=err.roll_up)
+
+    return web.json_response(user_message)
 
 
 @docs(
@@ -213,15 +224,15 @@ async def pds_activate(context, pds_type, instance_name="default"):
     )
 
     if check_if_storage_type_is_registered is None:
-        raise web.HTTPNotFound(reason="List of PDSes is not initialized!")
+        raise PDSError("List of PDSes is not initialized!")
 
     check_if_storage_type_is_registered = check_if_storage_type_is_registered.get(
         pds_type
     )
 
     if check_if_storage_type_is_registered is None:
-        raise web.HTTPNotFound(
-            reason="Chosen type is not in the registered list, "
+        raise PDSError(
+            "Chosen type is not in the registered list, "
             "make sure there are no typos!"
             "Use GET settings to look for registered types"
         )
@@ -231,13 +242,13 @@ async def pds_activate(context, pds_type, instance_name="default"):
             context, pds_type, instance_name
         )
     except StorageNotFoundError as err:
-        raise web.HTTPNotFound(reason="Couldn't find PDS " + err.roll_up)
+        raise PDSError("Couldn't find PDS " + err.roll_up)
 
     try:
         active_pds = await SavedPDS.retrieve_active(context)
 
     except StorageNotFoundError as err:
-        raise web.HTTPNotFound(reason="Couldn't find active PDS " + err.roll_up)
+        raise PDSError("Couldn't find active PDS " + err.roll_up)
 
     active_pds.state = SavedPDS.INACTIVE
     pds_to_activate.state = SavedPDS.ACTIVE
@@ -256,7 +267,10 @@ async def set_active_storage_type(request: web.BaseRequest):
     context = request.app["request_context"]
     instance_name = request.query.get("optional_name", "default")
     pds_type = request.query.get("type", None)
-    await pds_activate(context, pds_type, instance_name)
+    try:
+        await pds_activate(context, pds_type, instance_name)
+    except PDSError as err:
+        raise web.HTTPNotFound(reason=err.roll_up)
 
     return web.json_response(
         {
@@ -321,7 +335,7 @@ async def get_multiple_records(request: web.BaseRequest):
 
 
 class GetMultipleRecordsForOcaSchema(Schema):
-    oca_schema_base_dris = fields.List(fields.Str(required=True))
+    oca_schema_base_dris = fields.List(fields.Str(required=True), required=True)
 
 
 @docs(
@@ -331,7 +345,9 @@ class GetMultipleRecordsForOcaSchema(Schema):
 async def get_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     dri_list = request.query
-    dri_list = dri_list.getall("oca_schema_base_dris")
+    dri_list = dri_list.getall("oca_schema_base_dris", None)
+    if dri_list is None:
+        raise web.HTTPBadRequest(reason="Missing data in query parameters")
 
     try:
         result = await load_multiple(context, oca_schema_base_dri=dri_list)
@@ -345,19 +361,6 @@ class PostMultipleRecordsForOcaSchema(Schema):
     data = fields.Dict(keys=fields.Str(), values=fields.Dict())
 
 
-async def pds_oca_data_format_save(context, data):
-    for record in data:
-        payload_id = await pds_save_a(
-            context,
-            record["data"],
-            oca_schema_dri=record["dri"],
-        )
-        record["payload_id"] = payload_id
-        record.pop("data", None)
-
-    return data
-
-
 @docs(
     tags=["PersonalDataStorage"],
     summary="Post data in bulk",
@@ -366,10 +369,11 @@ async def pds_oca_data_format_save(context, data):
 async def post_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
-    data = body.get("data")
+    if __debug__:
+        assert isinstance(body, list)
 
     try:
-        result = await pds_oca_data_format_save(context, data)
+        result = await pds_save_chunks(context, body)
     except PDSError as err:
         raise web.HTTPInternalServerError(err)
 

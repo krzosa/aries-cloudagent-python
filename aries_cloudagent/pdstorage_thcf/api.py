@@ -24,13 +24,14 @@ async def match_table_query_id(context, id):
     try:
         match = await DriStorageMatchTable.retrieve_by_id(context, id)
     except StorageNotFoundError as err:
-        LOGGER.error(
-            f"table_that_matches_plugins_with_ids id that matches with None value\n",
-            f"input id: {id}\n",
-            f"ERROR: {err.roll_up}",
-        )
-        debug_all_records = await DriStorageMatchTable.query(context)
-        LOGGER.error("All records in table: ", debug_all_records)
+        if __debug__:
+            LOGGER.error(
+                f"table_that_matches_plugins_with_ids id that matches with None value\n",
+                f"input id: {id}\n",
+                f"ERROR: {err.roll_up}",
+            )
+            # debug_all_records = await DriStorageMatchTable.query(context)
+            # LOGGER.error("All records in table: ", debug_all_records)
         raise PDSNotFoundError(err)
 
     return match
@@ -58,7 +59,8 @@ async def pds_get_active(context):
 
 
 async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
-    assert_type(id, str)
+    if __debug__:
+        assert_type(id, str)
 
     match = await match_table_query_id(context, id)
     pds = await pds_get_by_name(context, match.pds_type)
@@ -78,7 +80,8 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
 
 
 async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
-    assert_type(id, str)
+    if __debug__:
+        assert_type(id, str)
 
     match = await match_table_query_id(context, id)
     pds = await pds_get_by_name(context, match.pds_type)
@@ -91,8 +94,9 @@ async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
 
 
 async def pds_save(context, payload, metadata: str = "{}") -> str:
-    assert_type_or(payload, str, dict)
-    assert_type(metadata, str)
+    if __debug__:
+        assert_type_or(payload, str, dict)
+        assert_type(metadata, str)
 
     active_pds_name = await pds_get_active_name(context)
     pds = await pds_get_by_name(context, active_pds_name)
@@ -105,7 +109,8 @@ async def pds_save(context, payload, metadata: str = "{}") -> str:
 async def pds_save_a(
     context, payload, *, oca_schema_dri: str = None, table: str = None
 ) -> str:
-    assert_type_or(payload, str, dict)
+    if __debug__:
+        assert_type_or(payload, str, dict)
 
     meta = {"table": table, "oca_schema_dri": oca_schema_dri}
     active_pds_name = await pds_get_active_name(context)
@@ -135,7 +140,8 @@ async def load_multiple(context, *, table: str = None, oca_schema_base_dri=None)
 
 
 async def delete_record(context, id: str) -> str:
-    assert_type(id, str)
+    if __debug__:
+        assert_type(id, str)
 
     match = await match_table_query_id(context, id)
     pds = await pds_get_by_name(context, match.pds_type)
@@ -152,6 +158,30 @@ async def pds_get_usage_policy_if_active_pds_supports_it(context):
     pds = await pds_get_by_name(context, active_pds_name)
     result = await pds.get_usage_policy()
 
+    return result
+
+
+async def _save_chunks(context, chunks, save_function):
+    if __debug__:
+        assert isinstance(chunks, list)
+    for chunk in chunks:
+        chunk_dri = chunk["dri"]
+        if __debug__:
+            assert isinstance(chunk_dri, str)
+            assert isinstance(chunk["payload"], list)
+        for chunk_payload in chunk["payload"]:
+            if __debug__:
+                assert isinstance(chunk_payload, dict)
+            payload_id = await save_function(
+                context, chunk_payload, oca_schema_dri=chunk_dri
+            )
+            chunk_payload["_payload_id"] = payload_id
+
+    return chunks
+
+
+async def pds_save_chunks(context, chunks):
+    result = await _save_chunks(context, chunks, pds_save_a)
     return result
 
 
