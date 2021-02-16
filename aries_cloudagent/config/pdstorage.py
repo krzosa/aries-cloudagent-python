@@ -14,7 +14,7 @@ async def personal_data_storage_config(context: InjectionContext):
     for saved_storage in all_saved_storages:
         pds: BasePDS = await context.inject(
             BasePDS,
-            {"personal_storage_type": saved_storage.get_pds_name()},
+            {"personal_storage_type": saved_storage.get_pds_full_name()},
         )
         pds.settings = saved_storage.settings
 

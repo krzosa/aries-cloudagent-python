@@ -37,24 +37,33 @@ async def match_table_query_id(context, id):
     return match
 
 
-async def pds_get_active_name(context):
+async def pds_active_get_full_name(context):
     try:
         active_pds = await SavedPDS.retrieve_active(context)
     except StorageNotFoundError as err:
         raise PDSNotFoundError(f"No active pds found {err.roll_up}")
 
-    return active_pds.get_pds_name()
+    return active_pds.get_pds_full_name()
 
 
-async def pds_get_by_name(context, name):
+async def pds_get_by_full_name(context, name):
+    """Creates a new instance if it doesn't exits"""
     pds: BasePDS = await context.inject(BasePDS, {"personal_storage_type": name})
 
     return pds
 
 
+async def pds_get(context, driver, instance_name):
+    """Creates a new instance if it doesn't exits"""
+    full_name = tuple([driver, instance_name])
+    result = await pds_get_by_full_name(context, full_name)
+    return result
+
+
 async def pds_get_active(context):
-    active_pds_name = await pds_get_active_name(context)
-    pds = await pds_get_by_name(context, active_pds_name)
+    """Creates a new instance if it doesn't exits"""
+    active_pds_name = await pds_active_get_full_name(context)
+    pds = await pds_get_by_full_name(context, active_pds_name)
     return pds
 
 
@@ -63,7 +72,7 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
         assert_type(id, str)
 
     match = await match_table_query_id(context, id)
-    pds = await pds_get_by_name(context, match.pds_type)
+    pds = await pds_get_by_full_name(context, match.pds_type)
     result = await pds.load(id)
 
     try:
@@ -84,7 +93,7 @@ async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
         assert_type(id, str)
 
     match = await match_table_query_id(context, id)
-    pds = await pds_get_by_name(context, match.pds_type)
+    pds = await pds_get_by_full_name(context, match.pds_type)
     result = await pds.load(id)
 
     if with_meta:
@@ -98,8 +107,8 @@ async def pds_save(context, payload, metadata: str = "{}") -> str:
         assert_type_or(payload, str, dict)
         assert_type(metadata, str)
 
-    active_pds_name = await pds_get_active_name(context)
-    pds = await pds_get_by_name(context, active_pds_name)
+    active_pds_name = await pds_active_get_full_name(context)
+    pds = await pds_get_by_full_name(context, active_pds_name)
     payload_id = await pds.save(payload, json.loads(metadata))
     payload_id = await match_save_save_record_id(context, payload_id, active_pds_name)
 
@@ -113,8 +122,8 @@ async def pds_save_a(
         assert_type_or(payload, str, dict)
 
     meta = {"table": table, "oca_schema_dri": oca_schema_dri}
-    active_pds_name = await pds_get_active_name(context)
-    pds = await pds_get_by_name(context, active_pds_name)
+    active_pds_name = await pds_active_get_full_name(context)
+    pds = await pds_get_by_full_name(context, active_pds_name)
     payload_id = await pds.save(payload, meta)
     payload_id = await match_save_save_record_id(context, payload_id, active_pds_name)
 
@@ -144,18 +153,18 @@ async def delete_record(context, id: str) -> str:
         assert_type(id, str)
 
     match = await match_table_query_id(context, id)
-    pds = await pds_get_by_name(context, match.pds_type)
+    pds = await pds_get_by_full_name(context, match.pds_type)
     result = await pds.delete(id)
 
     return result
 
 
 async def pds_get_usage_policy_if_active_pds_supports_it(context):
-    active_pds_name = await pds_get_active_name(context)
+    active_pds_name = await pds_active_get_full_name(context)
     if active_pds_name[0] != "own_your_data":
         return None
 
-    pds = await pds_get_by_name(context, active_pds_name)
+    pds = await pds_get_by_full_name(context, active_pds_name)
     result = await pds.get_usage_policy()
 
     return result
@@ -195,7 +204,7 @@ def encode(data: str) -> str:
     return result.decode("utf-8")
 
 
-async def pds_update_setting_of_saved_pds(
+async def pds_configure_saved_instance(
     context, driver_name, instance_name, driver_setting
 ):
     if __debug__:
@@ -218,18 +227,15 @@ async def pds_update_setting_of_saved_pds(
     return pds
 
 
-async def update_setting_of_created_pds_if_doesnt_exist_create_pds(
-    context, driver_name, instance_name, driver_setting
-):
+async def pds_configure_instance(context, driver_name, instance_name, driver_setting):
+    """Creates a new instance if it doesn't exists"""
     if __debug__:
         assert_type(driver_setting, dict) and driver_setting is not {}
         assert_type(driver_name, str)
         assert_type(instance_name, str)
 
-    pds: BasePDS = await context.inject(
-        BasePDS, {"personal_storage_type": (driver_name, instance_name)}
-    )
-    pds.settings.update(driver_setting)
+    pds = await pds_get(context, driver_name, instance_name)
+    pds.settings = driver_setting
     return pds
 
 
@@ -245,12 +251,11 @@ async def pds_set_setting(
 
     driver_setting["client_secret"] = client_secret
     driver_setting["client_id"] = client_id
-    print(driver_setting)
 
-    await pds_update_setting_of_saved_pds(
+    await pds_configure_saved_instance(
         context, driver_name, instance_name, driver_setting
     )
-    pds = await update_setting_of_created_pds_if_doesnt_exist_create_pds(
+    pds = await pds_configure_instance(
         context, driver_name, instance_name, driver_setting
     )
     connected, exception = await pds.ping()

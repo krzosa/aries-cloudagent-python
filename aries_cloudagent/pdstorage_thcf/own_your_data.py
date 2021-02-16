@@ -40,16 +40,17 @@ class OwnYourDataVault(BasePDS):
         self.api_url = None
         self.token = {"expires_in": "-1000"}
         self.token_timestamp = 0
+        self.usage_policy = None
         self.preview_settings = {
             "oca_schema_namespace": "pds",
             "oca_schema_dri": "9bABtmHu628Ss4oHmyTU5gy7QB1VftngewTmh7wdmN1j",
         }
 
     async def get_usage_policy(self):
-        if self.settings.get("usage_policy") is None:
+        if self.usage_policy is None:
             await self.update_token()
 
-        return self.settings["usage_policy"]
+        return self.usage_policy
 
     async def update_token(self):
         parsed_url = urlparse(self.settings.get("api_url"))
@@ -76,7 +77,6 @@ class OwnYourDataVault(BasePDS):
             }
             if scope is not None:
                 body["scope"] = scope
-            print(body)
             result = await session.post(
                 self.api_url + "/oauth/token",
                 json=body,
@@ -99,8 +99,8 @@ class OwnYourDataVault(BasePDS):
                 headers={"Authorization": "Bearer " + self.token["access_token"]},
             )
             result = await unpack_response(result)
-            self.settings["usage_policy"] = result
-            LOGGER.debug("Usage policy %s", self.settings["usage_policy"])
+            self.usage_policy = result
+            LOGGER.debug("Usage policy %s", self.usage_policy)
 
     async def update_token_when_expired(self):
         time_elapsed = time.time() - (self.token_timestamp - 10)

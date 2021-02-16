@@ -38,8 +38,8 @@ class TestPDSSettings(AsyncTestCase):
             pds_object.ping.return_value.set_result([True, "except"])
             return pds_object
 
-        api.update_setting_of_created_pds_if_doesnt_exist_create_pds = stub
-        api.pds_update_setting_of_saved_pds = stub
+        api.pds_configure_instance = stub
+        api.pds_configure_saved_instance = stub
 
         driver = self.settings[0]["driver"]["name"]
         connected, exception = await pds_set_setting(

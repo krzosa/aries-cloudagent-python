@@ -18,7 +18,7 @@ from .base import BaseHolder, HolderError
 from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
     pds_load,
-    pds_get_active_name,
+    pds_active_get_full_name,
     pds_save,
     pds_save_a,
 )
@@ -276,7 +276,7 @@ class PDSHolder(BaseHolder):
         except PDSNotFoundError as err:
             raise HolderError(err.roll_up)
 
-        active_pds = await pds_get_active_name(self.context)
+        active_pds = await pds_active_get_full_name(self.context)
         for i in query:
             try:
                 await DriStorageMatchTable.retrieve_by_id(self.context, i["dri"])

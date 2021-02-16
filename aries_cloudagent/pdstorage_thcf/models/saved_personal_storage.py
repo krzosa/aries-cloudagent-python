@@ -40,7 +40,7 @@ class SavedPDS(BaseRecord):
     def record_tags(self) -> dict:
         return {"type": self.type, "name": self.name, "state": self.state}
 
-    def get_pds_name(self) -> tuple:
+    def get_pds_full_name(self) -> tuple:
         result = tuple([self.type, self.name])
         return result
 
