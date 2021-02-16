@@ -9,8 +9,8 @@ version_meta = runpy.run_path("./{}/version.py".format(PACKAGE_NAME))
 VERSION = version_meta["__version__"]
 
 
-with open(os.path.abspath("./README.md"), "r") as fh:
-    long_description = fh.read()
+# with open(os.path.abspath("./README.md"), "r") as fh:
+#     long_description = fh.read()
 
 
 def parse_requirements(filename):
@@ -23,9 +23,9 @@ if __name__ == "__main__":
     setup(
         name=PACKAGE_NAME,
         version=VERSION,
-        long_description=long_description,
-        long_description_content_type="text/markdown",
-        url="https://github.com/hyperledger/aries-cloudagent-python",
+        # long_description=long_description,
+        # long_description_content_type="text/markdown",
+        url="https://github.com/THCLab/aries-cloudagent-python",
         packages=find_packages(),
         include_package_data=True,
         package_data={"aries_cloudagent": ["requirements.txt"]},
