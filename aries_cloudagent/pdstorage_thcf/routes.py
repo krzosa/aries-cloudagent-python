@@ -8,7 +8,7 @@ from aiohttp_apispec import (
 
 from marshmallow import Schema, fields
 from .base import BasePDS
-from .api import load_multiple, pds_load, pds_save, pds_save_chunks
+from .api import load_multiple, pds_load, pds_save, pds_save_chunks, pds_set_settings
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..storage.error import StorageNotFoundError, StorageError
@@ -38,7 +38,7 @@ class GetSettingsSchema(Schema):
     )
 
 
-@docs(tags=["Personal Data Storage"], summary="Save data in a public data storage")
+@docs(tags=["PersonalDataStorage"], summary="Save data in a public data storage")
 @request_schema(Model.Payload)
 @response_schema(Model.DRIResponse)
 async def save_record(request: web.BaseRequest):
@@ -54,7 +54,7 @@ async def save_record(request: web.BaseRequest):
 
 
 @docs(
-    tags=["Personal Data Storage"],
+    tags=["PersonalDataStorage"],
     summary="Retrieve data from a public data storage using data id",
 )
 @response_schema(Model.Payload)
@@ -87,7 +87,7 @@ async def pds_request_record_from_other_agent_ex(request, connection_id, payload
 
 
 @docs(
-    tags=["Personal Data Storage"],
+    tags=["PersonalDataStorage"],
     summary="Retrieve data from a public data storage using data id",
 )
 @querystring_schema(GetRecordFromAgentSchema())
@@ -102,98 +102,49 @@ async def get_record_from_agent(request: web.BaseRequest):
     return web.json_response({"success": True})
 
 
-async def pds_set_settings(context, settings: dict):
-    """
-    Get all pds configurations from the user's input json
-    and either update all specified instances or create new instances
-    for types which are not existent
-    """
-    assert isinstance(settings, dict) and settings is not {}
-
-    user_message = {}
-    for type in settings:
-        per_type_setting = settings.get(type)
-        instance_name = per_type_setting.get("optional_instance_name", "default")
-        per_type_setting.pop("optional_instance_name", None)
-
-        scope = per_type_setting.get("scope")
-        if scope is not None:
-            if not scope:
-                per_type_setting.pop("scope")
-            elif scope.isnumeric():
-                scope_options = {"0": "admin", "1": "write", "2": "read"}
-                per_type_setting["scope"] = scope_options.get(scope, "")
-        if scope is None:
-            per_type_setting["scope"] = None
-
-        # create or update a saved pds
-        try:
-            saved_pds = await SavedPDS.retrieve_type_name(context, type, instance_name)
-            saved_pds.settings = per_type_setting
-        except StorageNotFoundError:
-            saved_pds = SavedPDS(
-                type=type,
-                name=instance_name,
-                state=SavedPDS.INACTIVE,
-                settings=per_type_setting,
-            )
-
-        await saved_pds.save(context)
-
-        # update active pds instances with new settings
-        personal_storage: BasePDS = await context.inject(
-            BasePDS, {"personal_storage_type": (type, instance_name)}
-        )
-        personal_storage.settings.update(per_type_setting)
-        connected, exception = await personal_storage.ping()
-
-        user_message[type] = {}
-        user_message[type]["connected"] = connected
-        if exception is not None:
-            user_message[type]["exception"] = exception
-
-    return user_message
-
-
 @docs(
     tags=["PersonalDataStorage"],
     summary="Set and configure current PersonalDataStorage",
-    description="""
-    Example of a correct schema:
-    {
-        "settings":
-        {
-            "local": {
-                "optional_instance_name: "default",
-                "no_configuration_needed": "yes-1234"
-            },
-            "data_vault": {
-                "optional_instance_name: "not_default",
-                "no_configuration_needed": "yes-1234"
-            },
-            "own_your_data": {
-                "client_id": "test-1234",
-                "client_secret": "test-1234",
-                "grant_type": "client_credentials"
-            }
-        }
-    }
-    """,
 )
-@request_schema(SaveSettingsSchema())
+@request_schema(Model.ArrayOfPDSSettings)
+@response_schema(Model.ArrayOfPDSSettings)
 async def set_settings(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
-    settings: dict = body.get("settings", None)
-    if settings is None:
-        raise web.HTTPNotFound(reason="Settings schema is empty")
+    if __debug__:
+        assert (
+            isinstance(body, list) and body is not []
+        ), "Error invalid input value, check the schema!"
 
     try:
-        user_message = await pds_set_settings(context, settings)
+        user_message = await pds_set_settings(context, body)
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
     return web.json_response(user_message)
+
+
+def unpack_pds_settings_to_user_facing_schema(list_of_pds):
+    if __debug__:
+        assert isinstance(list_of_pds, list)
+        assert len(list_of_pds) > 0
+    result = []
+    for pds in list_of_pds:
+        pds_setting = {}
+        current_driver_setting = pds.settings.copy()
+        if __debug__:
+            assert current_driver_setting["client_id"]
+            assert current_driver_setting["client_secret"]
+        client_id = current_driver_setting.pop("client_id", None)
+        client_secret = current_driver_setting.pop("client_secret", None)
+        if client_id:
+            pds_setting["client_id"] = client_id
+        if client_secret:
+            pds_setting["client_secret"] = client_secret
+        pds_setting["instance_name"] = pds.name
+        pds_setting["driver"] = {"name": pds.type, pds.type: current_driver_setting}
+        result.append(pds_setting)
+    return result
 
 
 @docs(
@@ -205,38 +156,38 @@ async def get_settings(request: web.BaseRequest):
     context = request.app["request_context"]
 
     try:
-        saved_pds = await SavedPDS.query(context)
-        assert isinstance(saved_pds, list), f"not list {saved_pds}, {type(saved_pds)}"
-        print("get_settings saved_pds:", saved_pds)
+        pds_list = await SavedPDS.query(context)
+        if __debug__:
+            assert isinstance(pds_list, list)
     except StorageError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
-    response_message = {}
-    for pds in saved_pds:
-        response_message.update({f"{pds.type}, {pds.name}": pds.settings})
-
-    return web.json_response(response_message)
+    result = unpack_pds_settings_to_user_facing_schema(pds_list)
+    return web.json_response(result)
 
 
-async def pds_activate(context, pds_type, instance_name="default"):
-    check_if_storage_type_is_registered = context.settings.get_value(
+def pds_check_if_driver_is_registered(settings, pds_driver):
+    check_if_pds_driver_is_registered = settings.get_value(
         "personal_storage_registered_types"
     )
 
-    if check_if_storage_type_is_registered is None:
+    if check_if_pds_driver_is_registered is None:
         raise PDSError("List of PDSes is not initialized!")
 
-    check_if_storage_type_is_registered = check_if_storage_type_is_registered.get(
-        pds_type
+    check_if_pds_driver_is_registered = check_if_pds_driver_is_registered.get(
+        pds_driver
     )
 
-    if check_if_storage_type_is_registered is None:
+    if check_if_pds_driver_is_registered is None:
         raise PDSError(
-            "Chosen type is not in the registered list, "
+            "Chosen driver is not in the registered list, "
             "make sure there are no typos!"
             "Use GET settings to look for registered types"
         )
 
+
+async def pds_activate(context, pds_type, instance_name="default"):
+    pds_check_if_driver_is_registered(context.settings, pds_type)
     try:
         pds_to_activate = await SavedPDS.retrieve_type_name(
             context, pds_type, instance_name
@@ -246,7 +197,6 @@ async def pds_activate(context, pds_type, instance_name="default"):
 
     try:
         active_pds = await SavedPDS.retrieve_active(context)
-
     except StorageNotFoundError as err:
         raise PDSError("Couldn't find active PDS " + err.roll_up)
 

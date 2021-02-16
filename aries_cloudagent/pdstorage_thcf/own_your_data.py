@@ -76,6 +76,7 @@ class OwnYourDataVault(BasePDS):
             }
             if scope is not None:
                 body["scope"] = scope
+            print(body)
             result = await session.post(
                 self.api_url + "/oauth/token",
                 json=body,
@@ -107,9 +108,6 @@ class OwnYourDataVault(BasePDS):
             await self.update_token()
 
     async def load(self, dri: str) -> dict:
-        """
-        TODO: Errors checking
-        """
         assert_type(dri, str)
         await self.update_token_when_expired()
 

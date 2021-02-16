@@ -124,19 +124,19 @@ async def pds_save_a(
 async def load_multiple(context, *, table: str = None, oca_schema_base_dri=None):
     """ Load multiple records, if oca_schema_base_dri is a list then returns a dictionary"""
     pds = await pds_get_active(context)
+    result = {}
     if isinstance(oca_schema_base_dri, list):
-        result = {}
         for dri in oca_schema_base_dri:
             result[dri] = await pds.load_multiple(table=table, oca_schema_base_dri=dri)
             result[dri] = json.loads(result[dri])
-        return result
 
     else:
         result = await pds.load_multiple(
             table=table, oca_schema_base_dri=oca_schema_base_dri
         )
         result = json.loads(result)
-        return result
+
+    return result
 
 
 async def delete_record(context, id: str) -> str:
@@ -193,3 +193,105 @@ def encode(data: str) -> str:
     result = multibase.encode("base58btc", multi)
 
     return result.decode("utf-8")
+
+
+async def pds_update_setting_of_saved_pds(
+    context, driver_name, instance_name, driver_setting
+):
+    if __debug__:
+        assert_type(driver_setting, dict) and driver_setting is not {}
+        assert_type(driver_name, str)
+        assert_type(instance_name, str)
+
+    try:
+        pds = await SavedPDS.retrieve_type_name(context, driver_name, instance_name)
+        pds.settings = driver_setting
+    except StorageNotFoundError:
+        pds = SavedPDS(
+            type=driver_name,
+            name=instance_name,
+            state=SavedPDS.INACTIVE,
+            settings=driver_setting,
+        )
+
+    await pds.save(context)
+    return pds
+
+
+async def update_setting_of_created_pds_if_doesnt_exist_create_pds(
+    context, driver_name, instance_name, driver_setting
+):
+    if __debug__:
+        assert_type(driver_setting, dict) and driver_setting is not {}
+        assert_type(driver_name, str)
+        assert_type(instance_name, str)
+
+    pds: BasePDS = await context.inject(
+        BasePDS, {"personal_storage_type": (driver_name, instance_name)}
+    )
+    pds.settings.update(driver_setting)
+    return pds
+
+
+async def pds_set_setting(
+    context, driver_name, instance_name, client_id, client_secret, driver_setting: dict
+):
+    if __debug__:
+        assert_type(driver_setting, dict) and driver_setting is not {}
+        assert_type(driver_name, str)
+        assert_type(instance_name, str)
+        assert_type(client_id, str)
+        assert_type(client_secret, str)
+
+    driver_setting["client_secret"] = client_secret
+    driver_setting["client_id"] = client_id
+    print(driver_setting)
+
+    await pds_update_setting_of_saved_pds(
+        context, driver_name, instance_name, driver_setting
+    )
+    pds = await update_setting_of_created_pds_if_doesnt_exist_create_pds(
+        context, driver_name, instance_name, driver_setting
+    )
+    connected, exception = await pds.ping()
+
+    return [connected, exception]
+
+
+async def pds_set_settings(context, settings: list):
+    """
+    TODO There is a bug here, doesn't return the status of multiple instances
+    of the same pds driver
+    """
+    message = {}
+    if __debug__:
+        assert isinstance(settings, list) and settings is not []
+        assert isinstance(settings[0], dict)
+    for s in settings:
+        instance_name = s.get("instance_name", None)
+        client_id = s.get("client_id", None)
+        client_secret = s.get("client_secret", None)
+        driver_setting = s.get("driver", None)
+        driver_name = driver_setting.get("name", None)
+        driver_setting = driver_setting.get(driver_name, None)
+        if __debug__:
+            assert_type(instance_name, str)
+            assert_type(client_id, str)
+            assert_type(client_secret, str)
+            assert_type(driver_setting, dict)
+            assert_type(driver_name, str)
+        connected, exception = await pds_set_setting(
+            context,
+            driver_name,
+            instance_name,
+            client_id,
+            client_secret,
+            driver_setting,
+        )
+        if __debug__:
+            assert isinstance(connected, bool)
+        message[driver_name] = {}
+        message[driver_name]["connected"] = connected
+        if exception is not None:
+            message[driver_name]["exception"] = exception
+    return message

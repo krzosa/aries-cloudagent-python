@@ -2,7 +2,7 @@ from asynctest import TestCase as AsyncTestCase
 from ..api import _save_chunks
 
 
-class TestPDSIssuer(AsyncTestCase):
+class TestPDSChunks(AsyncTestCase):
     async def setUp(self):
         self.chunks = [
             {
