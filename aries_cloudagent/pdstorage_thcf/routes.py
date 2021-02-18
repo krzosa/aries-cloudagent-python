@@ -11,7 +11,10 @@ from marshmallow import Schema, fields
 from .base import BasePDS
 from .api import (
     load_multiple,
+    pds_active_get_full_name,
     pds_get,
+    pds_get_active,
+    pds_get_by_full_name,
     pds_load,
     pds_save,
     pds_save_chunks,
@@ -231,7 +234,7 @@ async def pds_post_activate(request: web.BaseRequest):
     return web.json_response()
 
 
-async def pds_drivers_oca_schema_dris_also_creates_default_instances(context):
+async def pds_get_default_drivers_schema_dris(context):
     drivers = context.settings.get("personal_storage_registered_types")
     registered = []
     for key in drivers:
@@ -258,10 +261,28 @@ async def get_pds_drivers(request: web.BaseRequest):
     # except StorageNotFoundError as err:
     #     raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
 
-    registered = await pds_drivers_oca_schema_dris_also_creates_default_instances(
-        context
-    )
+    registered = await pds_get_default_drivers_schema_dris(context)
     return web.json_response(registered)
+
+
+@docs(
+    tags=["PersonalDataStorage"],
+    summary="Get active PDS instance",
+)
+@response_schema(Model.ArrayOfPDSDrivers)
+async def get_active_pds_instance(request: web.BaseRequest):
+    context = request.app["request_context"]
+    active_pds_name = await pds_active_get_full_name(context)
+    pds = await pds_get_by_full_name(context, active_pds_name)
+    result = {
+        "instance_name": active_pds_name[1],
+        "driver": {
+            "name": active_pds_name[0],
+            "oca_schema_dri": pds.preview_settings["oca_schema_dri"],
+        },
+    }
+
+    return web.json_response(result)
 
 
 class GetMultipleRecordsSchema(Schema):
@@ -345,6 +366,11 @@ async def register(app: web.Application):
             web.post(
                 "/pds/get_from",
                 get_record_from_agent,
+            ),
+            web.get(
+                "/pds/active",
+                get_active_pds_instance,
+                allow_head=False,
             ),
             web.get(
                 "/pds/drivers",
