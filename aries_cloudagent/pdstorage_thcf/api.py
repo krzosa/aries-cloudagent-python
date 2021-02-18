@@ -264,11 +264,7 @@ async def pds_set_setting(
 
 
 async def pds_set_settings(context, settings: list):
-    """
-    TODO There is a bug here, doesn't return the status of multiple instances
-    of the same pds driver
-    """
-    message = {}
+    messages = []
     if __debug__:
         assert isinstance(settings, list) and settings is not []
         assert isinstance(settings[0], dict)
@@ -295,8 +291,11 @@ async def pds_set_settings(context, settings: list):
         )
         if __debug__:
             assert isinstance(connected, bool)
-        message[driver_name] = {}
-        message[driver_name]["connected"] = connected
+        message = {}
+        message["driver"] = driver_name
+        message["instance_name"] = instance_name
+        message["connected"] = connected
         if exception is not None:
-            message[driver_name]["exception"] = exception
-    return message
+            message["exception"] = exception
+        messages.append(message)
+    return messages

@@ -80,7 +80,10 @@ class TestPDSSettings(AsyncTestCase):
         # pds_set_setting = stub_set_setting
         self.settings.append(self.settings[0])
         api.pds_set_setting = stub_set_setting
-        message = await api.pds_set_settings(None, self.settings)
-        assert call_count == 2
-        assert message["own_your_data"]["connected"] == True
-        assert message["own_your_data"]["exception"] == "except"
+        messages = await api.pds_set_settings(None, self.settings)
+        assert len(messages) == 2
+        for i in messages:
+            i["driver"] == "own_your_data"
+            i["exception"] == "except"
+            i["connected"] == True
+            i["instance_name"] == "string"

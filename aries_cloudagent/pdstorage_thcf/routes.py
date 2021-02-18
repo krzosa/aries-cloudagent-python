@@ -132,9 +132,6 @@ def unpack_pds_settings_to_user_facing_schema(list_of_pds):
     for pds in list_of_pds:
         pds_setting = {}
         current_driver_setting = pds.settings.copy()
-        if __debug__:
-            assert current_driver_setting["client_id"]
-            assert current_driver_setting["client_secret"]
         client_id = current_driver_setting.pop("client_id", None)
         client_secret = current_driver_setting.pop("client_secret", None)
         if client_id:
