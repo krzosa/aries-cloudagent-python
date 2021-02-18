@@ -1,3 +1,4 @@
+import re
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
@@ -8,7 +9,14 @@ from aiohttp_apispec import (
 
 from marshmallow import Schema, fields
 from .base import BasePDS
-from .api import load_multiple, pds_load, pds_save, pds_save_chunks, pds_set_settings
+from .api import (
+    load_multiple,
+    pds_get,
+    pds_load,
+    pds_save,
+    pds_save_chunks,
+    pds_set_settings,
+)
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..storage.error import StorageNotFoundError, StorageError
@@ -107,7 +115,7 @@ async def get_record_from_agent(request: web.BaseRequest):
     summary="Set and configure current PersonalDataStorage",
 )
 @request_schema(Model.ArrayOfPDSSettings)
-@response_schema(Model.ArrayOfPDSSettings)
+@response_schema(Model.ArrayOfPDSDriverStatuses)
 async def set_settings(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
@@ -209,51 +217,51 @@ async def pds_activate(context, pds_type, instance_name="default"):
     summary="Set a public data storage type by name",
     description="for example: 'local', get possible types by calling 'GET /pds' endpoint",
 )
-@querystring_schema(SetActiveStorageTypeSchema())
-async def set_active_storage_type(request: web.BaseRequest):
+@request_schema(Model.PDSActivate)
+async def pds_post_activate(request: web.BaseRequest):
     context = request.app["request_context"]
-    instance_name = request.query.get("optional_name", "default")
-    pds_type = request.query.get("type", None)
+    body = await request.json()
+    instance_name = body.get("instance_name", "default")
+    driver = body.get("driver", None)
     try:
-        await pds_activate(context, pds_type, instance_name)
+        await pds_activate(context, driver, instance_name)
     except PDSError as err:
         raise web.HTTPNotFound(reason=err.roll_up)
 
-    return web.json_response(
-        {
-            "message": f"PDS of type ({pds_type}, {instance_name}) set succesfully",
+    return web.json_response()
+
+
+async def pds_drivers_oca_schema_dris_also_creates_default_instances(context):
+    drivers = context.settings.get("personal_storage_registered_types")
+    registered = []
+    for key in drivers:
+        personal_storage = await pds_get(context, key, "default")
+        driver = {
+            "name": key,
+            "oca_schema_dri": personal_storage.preview_settings["oca_schema_dri"],
         }
-    )
+        registered.append(driver)
+
+    return registered
 
 
 @docs(
     tags=["PersonalDataStorage"],
     summary="Get all registered public storage types, get which storage_type is active",
 )
-# @response_schema(Model.PDSResponse)
-async def get_storage_types(request: web.BaseRequest):
+@response_schema(Model.ArrayOfPDSDrivers)
+async def get_pds_drivers(request: web.BaseRequest):
     context = request.app["request_context"]
-    registered_types = context.settings.get("personal_storage_registered_types")
-    instance_name = "default"
 
-    try:
-        active_pds = await SavedPDS.retrieve_active(context)
-    except StorageNotFoundError as err:
-        raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
+    # try:
+    #     active_pds = await SavedPDS.retrieve_active(context)
+    # except StorageNotFoundError as err:
+    #     raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
 
-    registered_type_names = {}
-    for key in registered_types:
-        personal_storage = await context.inject(
-            BasePDS, {"personal_storage_type": (key, instance_name)}
-        )
-        registered_type_names[key] = personal_storage.preview_settings
-
-    return web.json_response(
-        {
-            "active_pds": f"{active_pds.type}, {active_pds.name}",
-            "types": registered_type_names,
-        }
+    registered = await pds_drivers_oca_schema_dris_also_creates_default_instances(
+        context
     )
+    return web.json_response(registered)
 
 
 class GetMultipleRecordsSchema(Schema):
@@ -333,14 +341,14 @@ async def register(app: web.Application):
         [
             web.post("/pds/save", save_record),
             web.post("/pds/settings", set_settings),
-            web.post("/pds/activate", set_active_storage_type),
+            web.post("/pds/activate", pds_post_activate),
             web.post(
                 "/pds/get_from",
                 get_record_from_agent,
             ),
             web.get(
-                "/pds",
-                get_storage_types,
+                "/pds/drivers",
+                get_pds_drivers,
                 allow_head=False,
             ),
             web.get(

@@ -1,5 +1,5 @@
 from .base import BasePDS
-from .error import PDSNotFoundError, PDSError, PDSRecordNotFoundError
+from .error import PDSError, PDSRecordNotFoundError
 from aiohttp import ClientSession, FormData, ClientConnectionError, ClientError
 import json
 import logging
@@ -47,8 +47,7 @@ class DataVault(BasePDS):
                 else:
                     raise PDSError(response_json)
         except json.JSONDecodeError:
-            LOGGER.warning("Error found in data_vault load %s", response_text)
-            pass
+            LOGGER.warning("Error found in thcf_data_vault load %s", response_text)
 
         return {"content": response_text}
 

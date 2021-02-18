@@ -50,7 +50,7 @@ def execute(argv: Sequence[str] = None):
     # thcf
     settings["personal_storage_registered_types"] = {
         "local": "aries_cloudagent.pdstorage_thcf.local.LocalPDS",
-        "data_vault": "aries_cloudagent.pdstorage_thcf.data_vault.DataVault",
+        "thcf_data_vault": "aries_cloudagent.pdstorage_thcf.thcf_data_vault.DataVault",
         "own_your_data": "aries_cloudagent.pdstorage_thcf.own_your_data.OwnYourDataVault",
     }
 
