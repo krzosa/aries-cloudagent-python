@@ -1,5 +1,5 @@
 from .base import BasePDS
-from .error import PDSNotFoundError
+from .error import PDSError, PDSNotFoundError
 from .models.saved_personal_storage import SavedPDS
 import hashlib
 import multihash
@@ -38,6 +38,7 @@ async def match_table_query_id(context, id):
 
 
 async def pds_active_get_full_name(context):
+    """Retrieves saved pds information from the storage"""
     try:
         active_pds = await SavedPDS.retrieve_active(context)
     except StorageNotFoundError as err:
@@ -47,21 +48,21 @@ async def pds_active_get_full_name(context):
 
 
 async def pds_get_by_full_name(context, name):
-    """Creates a new instance if it doesn't exits"""
+    """Creates a pds new instance(singleton) if it doesn't exits"""
     pds: BasePDS = await context.inject(BasePDS, {"personal_storage_type": name})
 
     return pds
 
 
 async def pds_get(context, driver, instance_name):
-    """Creates a new instance if it doesn't exits"""
+    """Creates a pds new instance(singleton) if it doesn't exits"""
     full_name = tuple([driver, instance_name])
     result = await pds_get_by_full_name(context, full_name)
     return result
 
 
 async def pds_get_active(context):
-    """Creates a new instance if it doesn't exits"""
+    """Creates a pds new instance(singleton) if it doesn't exits"""
     active_pds_name = await pds_active_get_full_name(context)
     pds = await pds_get_by_full_name(context, active_pds_name)
     return pds
@@ -106,7 +107,7 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
     if __debug__:
         assert_type_or(payload, str, dict)
         if oca_schema_dri is not None:
-            assert_type(payload, str)
+            assert_type(oca_schema_dri, str)
 
     active_pds_name = await pds_active_get_full_name(context)
     pds = await pds_get_by_full_name(context, active_pds_name)
@@ -120,17 +121,6 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
 
 
 async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
-    """
-    @returns [
-        {
-            "dri": "string",
-            "payload": [
-                {   },
-                {   },
-            ]
-        }
-    ]
-    """
     if __debug__:
         assert_type_or(oca_schema_dri, str, list)
 
@@ -139,10 +129,13 @@ async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
 
     pds = await pds_get_active(context)
     result = []
-
     for dri in oca_schema_dri:
         result_record = {"dri": dri}
-        result_record["payload"] = await pds.pds_query_by_oca_schema_dri(oca_schema_dri)
+        try:
+            result_record["payload"] = await pds.query_by_oca_schema_dri(dri)
+        except PDSError:
+            result_record["payload"] = [{}]
+
         result.append(result_record)
 
     return result

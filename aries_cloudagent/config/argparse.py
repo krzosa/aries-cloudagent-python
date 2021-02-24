@@ -178,8 +178,13 @@ class DebugGroup(ArgumentGroup):
             "--debug",
             action="store_true",
             help="Enables a remote debugging service that can be accessed\
-            using ptvsd for Visual Studio Code. The framework will wait\
-            for the debugger to connect at start-up. Default: false.",
+            using ptvsd for Visual Studio Code. Default: false.",
+        )
+        parser.add_argument(
+            "--debug-wait",
+            action="store_true",
+            help="Needs --debug flag to work. Server waits for debugger attach\
+                before launching the application.",
         )
         parser.add_argument(
             "--debug-seed",

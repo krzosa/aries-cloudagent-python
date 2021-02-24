@@ -190,6 +190,8 @@ class OwnYourDataVault(BasePDS):
         LOGGER.info("URL: [ %s ]", url)
 
         result = await self.get(url)
+        if result == "[]":
+            result = [{}]
 
         return result
 

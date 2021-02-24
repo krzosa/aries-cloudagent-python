@@ -309,9 +309,7 @@ async def get_oca_schema_chunks(request: web.BaseRequest):
         raise web.HTTPBadRequest(reason="Missing data in query parameters")
 
     try:
-        result = await pds_query_by_oca_schema_dri(
-            context, oca_schema_base_dri=dri_list
-        )
+        result = await pds_query_by_oca_schema_dri(context, dri_list)
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
@@ -354,6 +352,7 @@ async def test_endpoint(request: web.BaseRequest):
     )
 
     sign = await wallet.sign_message(bytes([104, 105]), key.verkey)
+
     print("Verkey: ", key)
     print("Signed message: ", sign)
     sign = list(sign)
