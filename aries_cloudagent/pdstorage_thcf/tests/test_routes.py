@@ -18,8 +18,8 @@ class TestRoutesFunctions(AsyncTestCase):
                 "client_id": "string",
                 "client_secret": "string",
                 "driver": {
-                    "name": "own_your_data",
-                    "own_your_data": {
+                    "name": "own_your_data_data_vault",
+                    "own_your_data_data_vault": {
                         "grant_type": "client_credentials",
                         "scope": "admin",
                     },

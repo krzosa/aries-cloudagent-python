@@ -97,18 +97,12 @@ class OpenAPISchema(Schema):
     
 class PDSActivate(OpenAPISchema):
     instance_name = fields.String(required=True)
-    driver = fields.String(required=True, validate=[OneOf(choices=['own_your_data', 'local', 'thcf_data_vault'], labels=[])])
-
-
-
+    driver = fields.String(required=True, validate=[OneOf(choices=['own_your_data_data_vault', 'own_your_data_sem_con', 'thcf_data_vault', 'local'], labels=[])])
 
 
 class NewApplication(OpenAPISchema):
     user_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
     service_uuid = fields.String(required=True)
-
-
-
 
 
 class Application(OpenAPISchema):
@@ -121,9 +115,6 @@ class Application(OpenAPISchema):
     service = fields.Nested(lambda: OCASchema(), required=True)
 
 
-
-
-
 class ArrayOfApplications(Application):
     def __init__(self, *args, **kwargs):
         kwargs['many'] = True
@@ -131,23 +122,14 @@ class ArrayOfApplications(Application):
 
 
 
-
-
-
 class MineApplication(Application):
     service_user_data = fields.String(required=True, description='JSON serialized service application data')
-
-
-
 
 
 class ArrayOfMineApplications(MineApplication):
     def __init__(self, *args, **kwargs):
         kwargs['many'] = True
         super().__init__(*args, **kwargs)
-
-
-
 
 
 
@@ -158,57 +140,40 @@ class PDSSetting(OpenAPISchema):
     instance_name = fields.String()
 
 
-
-
-
 class PDSSettingDriver(OpenAPISchema):
-    name = fields.String(required=True, validate=[OneOf(choices=['own_your_data', 'thcf_data_vault', 'local'], labels=[])])
+    name = fields.String(required=True, validate=[OneOf(choices=['own_your_data_data_vault', 'own_your_data_sem_con', 'thcf_data_vault', 'local'], labels=[])])
     thcf_data_vault = fields.Nested(lambda: PDSSettingDriverThcf_data_vault())
-    own_your_data = fields.Nested(lambda: PDSSettingDriverOwn_your_data())
+    own_your_data_data_vault = fields.Nested(lambda: PDSSettingDriverOwn_your_data_data_vault())
+    own_your_data_sem_con = fields.Nested(lambda: PDSSettingDriverOwn_your_data_sem_con())
     local = fields.Nested(lambda: PDSSettingDriverLocal())
-
-
-
 
 
 class PDSSettingDriverLocal(OpenAPISchema):
     test = fields.String()
 
 
-
-
-
-class PDSSettingDriverOwn_your_data(OpenAPISchema):
+class PDSSettingDriverOwn_your_data_sem_con(OpenAPISchema):
+    scope = fields.String(required=True, validate=[OneOf(choices=['admin', 'write', 'read'], labels=[])])
     grant_type = fields.String(required=True, validate=[OneOf(choices=['client_credentials'], labels=[])])
 
 
-
+class PDSSettingDriverOwn_your_data_data_vault(OpenAPISchema):
+    grant_type = fields.String(required=True, validate=[OneOf(choices=['client_credentials'], labels=[])])
 
 
 class PDSSettingDriverThcf_data_vault(OpenAPISchema):
     host = fields.String(required=True, description='Server URL')
 
 
+class PDSDriver(OpenAPISchema):
+    name = fields.String(validate=[OneOf(choices=['own_your_data_data_vault', 'own_your_data_sem_con', 'thcf_data_vault', 'local'], labels=[])])
+    oca_schema_dri = fields.String()
 
 
-
-class PDSDriverStatus(OpenAPISchema):
-    connected = fields.Boolean(required=True)
-    driver = fields.String(required=True)
-    instance_name = fields.String(required=True)
-    exception = fields.String()
-
-
-
-
-
-class ArrayOfPDSDriverStatuses(PDSDriverStatus):
+class ArrayOfPDSDrivers(PDSDriver):
     def __init__(self, *args, **kwargs):
         kwargs['many'] = True
         super().__init__(*args, **kwargs)
-
-
-
 
 
 
@@ -219,33 +184,9 @@ class ArrayOfPDSSettings(PDSSetting):
 
 
 
-
-
-
-class PDSDriver(OpenAPISchema):
-    name = fields.String(validate=[OneOf(choices=['own_your_data', 'thcf_data_vault', 'local'], labels=[])])
-    oca_schema_dri = fields.String()
-
-
-
-
-
-class ArrayOfPDSDrivers(PDSDriver):
-    def __init__(self, *args, **kwargs):
-        kwargs['many'] = True
-        super().__init__(*args, **kwargs)
-
-
-
-
-
-
 class PDSDriverInstance(OpenAPISchema):
     instance_name = fields.String()
     driver = fields.Nested(lambda: PDSDriver())
-
-
-
 
 
 class OCASchemaChunk(OpenAPISchema):
@@ -253,16 +194,10 @@ class OCASchemaChunk(OpenAPISchema):
     payload = fields.List(fields.Nested(lambda: OCASchemaChunkPayloadItem()), required=True)
 
 
-
-
-
 class ArrayOfOCASchemaChunks(OCASchemaChunk):
     def __init__(self, *args, **kwargs):
         kwargs['many'] = True
         super().__init__(*args, **kwargs)
-
-
-
 
 
 
@@ -280,21 +215,12 @@ class OCASchemaChunkPayload(OCASchemaChunkPayloadItem):
 
 
 
-
-
-
 class OCASchema(OpenAPISchema):
     oca_schema_dri = fields.String(required=True)
 
 
-
-
-
 class OCASchemaDRIDataTuple(OCASchema):
     oca_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
-
-
-
 
 
 class Consent(OCASchemaDRIDataTuple):
@@ -302,24 +228,23 @@ class Consent(OCASchemaDRIDataTuple):
     consent_uuid = fields.String(required=True, allow_none=True)
 
 
+class ArrayOfConsents(Consent):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
 
 
 
 class Service(OpenAPISchema):
+    uuid = fields.UUID(required=True)
     label = fields.String(required=True)
     updated_at = fields.String(allow_none=True)
     created_at = fields.String(allow_none=True)
     service_schema_dri = fields.String(required=True, description='OCA Schema DRI')
 
 
-
-
-
 class DefinedService(Service):
     consent = fields.Nested(lambda: OCASchemaDRIDataTuple(), required=True)
-
-
-
 
 
 class ArrayOfDefinedServices(DefinedService):
@@ -329,20 +254,52 @@ class ArrayOfDefinedServices(DefinedService):
 
 
 
-
-
-
 class NewService(Service):
-    consent_uuid = fields.String(required=True)
+    consent_uuid = fields.UUID(required=True)
+
+
+class Document(OpenAPISchema):
+    xcontext = fields.List(fields.String(), data_key='@context')
+    issuanceDate = fields.String()
+    issuer = fields.String()
+    proof = fields.Nested(lambda: DocumentProof())
+    type = fields.List(fields.String())
+    credentialSubject = fields.Nested(lambda: DocumentCredentialSubject())
+
+
+class ArrayOfDocuments(Document):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
 
 
 
+class DocumentCredentialSubject(AdditionalPropertiesSchema):
+    subject_id = fields.String()
+    type = fields.String()
+
+    class Meta:
+        additional_field = fields.Dict(keys=fields.String(), values=fields.String())
 
 
-class RequestServiceList(OpenAPISchema):
-    result = fields.String(required=True)
+
+class DocumentType(PrimitiveValueSchema):
+    class schema_class(OpenAPISchema):
+        value = fields.List(fields.String())
 
 
+
+class DocumentProof(OpenAPISchema):
+    created = fields.String()
+    jws = fields.String()
+    proofPurpose = fields.String()
+    type = fields.String()
+    verificationMethod = fields.String()
+
+
+class Documentxcontext(PrimitiveValueSchema):
+    class schema_class(OpenAPISchema):
+        value = fields.List(fields.String())
 
 
 
@@ -350,10 +307,240 @@ class Payload(OpenAPISchema):
     payload = fields.String(required=True)
 
 
-
-
-
 class DRIResponse(OpenAPISchema):
     dri = fields.String(required=True)
 
 
+class Error(OpenAPISchema):
+    message = fields.String()
+    code = fields.String()
+    payload = fields.List(fields.String())
+
+
+class ErrorPayload(PrimitiveValueSchema):
+    class schema_class(OpenAPISchema):
+        value = fields.List(fields.String())
+
+
+
+class ApplicationsMineInput:
+    class Get:
+        """
+        Queries for all pending applications that I have applied to
+        """
+
+        pass
+
+
+
+class ApplicationsOthersInput:
+    class Get:
+        """
+        Queries for all pending applications that others applied to
+        """
+
+        pass
+
+
+
+class ApplicationsApplianceUuidAcceptInput:
+    class Put:
+        class Path(OpenAPISchema):
+            appliance_uuid = fields.Field(required=True)
+
+
+
+
+class ApplicationsApplianceUuidRejectInput:
+    class Put:
+        class Path(OpenAPISchema):
+            appliance_uuid = fields.Field(required=True)
+
+
+
+
+class PdsSettingsInput:
+    class Post:
+        """
+        Set the configuration of pds instances and/or create pds instances
+        """
+
+        pass
+
+    class Get:
+        """
+        Query settings of all currently setup PDSes
+        """
+
+        pass
+
+
+
+class PdsActivateInput:
+    class Post:
+        """
+        Choose a PDS for all the saving operations
+        """
+
+        pass
+
+
+
+class PdsActiveInput:
+    class Get:
+        pass
+
+
+
+class PdsDriversInput:
+    class Get:
+        """
+        Get all registered PDSes and current active PDS
+        """
+
+        pass
+
+
+
+class PdsOcaschemachunksInput:
+    class Get:
+        """
+        Retrieve data in bulk
+        """
+
+        class Query(OpenAPISchema):
+            oca_schema_dris = fields.Field()
+
+
+    class Post:
+        """
+        Post data in bulk
+        """
+
+        pass
+
+
+
+class ConsentsInput:
+    class Post:
+        """
+        Define a new consent
+        """
+
+        pass
+
+    class Get:
+        """
+        Retrieve all defined consents
+        """
+
+        pass
+
+
+
+class ConsentsConsentUuidInput:
+    class Delete:
+        """
+        Removes consent by its uuid
+        """
+
+        class Path(OpenAPISchema):
+            consent_uuid = fields.Field(required=True)
+
+
+
+
+class ConnectionsConnectionUuidServicesInput:
+    class Get:
+        """
+        Request a service list from other agent
+        """
+
+        class Path(OpenAPISchema):
+            connection_uuid = fields.Field(required=True)
+
+
+
+
+class ServicesInput:
+    class Get:
+        """
+        Retrieve all defined services
+        """
+
+        class Query(OpenAPISchema):
+            connection_id = fields.Field(description='leave blank if you want to see your services')
+            service_id = fields.Field(description='query a single, specific record')
+
+
+
+
+class ServicesAddInput:
+    class Post:
+        """
+        Define a new service
+        """
+
+        pass
+
+
+
+class ServicesApplyInput:
+    class Post:
+        """
+        Apply to other agent's service
+        """
+
+        pass
+
+
+
+class ServicesServiceUuidInput:
+    class Delete:
+        """
+        Removes service by its uuid
+        """
+
+        class Path(OpenAPISchema):
+            service_uuid = fields.Field(required=True)
+
+
+
+
+class DocumentsGivenconsentsInput:
+    class Get:
+        """
+        Retrieve all consents given to other agent's
+        """
+
+        pass
+
+
+
+class DocumentsMineconsentsInput:
+    class Get:
+        """
+        Retrieve all consents I have received
+        """
+
+        pass
+
+
+
+class DocumentsGivenInput:
+    class Get:
+        """
+        Retrieve all documents given to other agent's
+        """
+
+        pass
+
+
+
+class DocumentsMineInput:
+    class Get:
+        """
+        Retrieve all documents I have received or created
+        """
+
+        pass

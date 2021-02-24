@@ -1,4 +1,4 @@
-import re
+from aries_cloudagent.wallet.base import BaseWallet
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
@@ -8,17 +8,15 @@ from aiohttp_apispec import (
 )
 
 from marshmallow import Schema, fields
-from .base import BasePDS
 from .api import (
-    load_multiple,
     pds_active_get_full_name,
     pds_get,
-    pds_get_active,
     pds_get_by_full_name,
     pds_load,
+    pds_query_by_oca_schema_dri,
     pds_save,
     pds_save_chunks,
-    pds_set_settings,
+    pds_set_setting,
 )
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
@@ -55,9 +53,12 @@ class GetSettingsSchema(Schema):
 async def save_record(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
+    payload = body.get("payload")
+    if __debug__:
+        assert isinstance(payload, str)
 
     try:
-        payload_id = await pds_save(context, body.get("payload"))
+        payload_id = await pds_save(context, payload)
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
@@ -113,26 +114,57 @@ async def get_record_from_agent(request: web.BaseRequest):
     return web.json_response({"success": True})
 
 
+def pds_check_if_driver_is_registered(settings, pds_driver):
+    check_if_pds_driver_is_registered = settings.get_value(
+        "personal_storage_registered_types"
+    )
+
+    if check_if_pds_driver_is_registered is None:
+        raise web.HTTPInternalServerError(reason="List of PDSes is not initialized!")
+
+    check_if_pds_driver_is_registered = check_if_pds_driver_is_registered.get(
+        pds_driver
+    )
+
+    if check_if_pds_driver_is_registered is None:
+        msg = (
+            "Chosen driver is not in the registered list, "
+            "make sure there are no typos!"
+            "Use GET settings to look for registered types."
+        )
+        raise web.HTTPNotFound(reason=msg)
+
+
 @docs(
     tags=["PersonalDataStorage"],
     summary="Set and configure current PersonalDataStorage",
 )
-@request_schema(Model.ArrayOfPDSSettings)
-@response_schema(Model.ArrayOfPDSDriverStatuses)
+@request_schema(Model.PDSSetting)
 async def set_settings(request: web.BaseRequest):
     context = request.app["request_context"]
     body = await request.json()
-    if __debug__:
-        assert (
-            isinstance(body, list) and body is not []
-        ), "Error invalid input value, check the schema!"
+
+    driver = body.get("driver")
+    driver_name = driver.get("name")
+    driver_setting = driver.get(driver_name)
+    pds_check_if_driver_is_registered(context.settings, driver_name)
 
     try:
-        user_message = await pds_set_settings(context, body)
+        connected, exception = await pds_set_setting(
+            context,
+            driver_name,
+            body.get("instance_name"),
+            body.get("client_id"),
+            body.get("client_secret"),
+            driver_setting,
+        )
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
-    return web.json_response(user_message)
+    if connected:
+        return web.json_response()
+    else:
+        return web.json_response({"message": exception.roll_up}, status=408)
 
 
 def unpack_pds_settings_to_user_facing_schema(list_of_pds):
@@ -174,44 +206,25 @@ async def get_settings(request: web.BaseRequest):
     return web.json_response(result)
 
 
-def pds_check_if_driver_is_registered(settings, pds_driver):
-    check_if_pds_driver_is_registered = settings.get_value(
-        "personal_storage_registered_types"
-    )
-
-    if check_if_pds_driver_is_registered is None:
-        raise PDSError("List of PDSes is not initialized!")
-
-    check_if_pds_driver_is_registered = check_if_pds_driver_is_registered.get(
-        pds_driver
-    )
-
-    if check_if_pds_driver_is_registered is None:
-        raise PDSError(
-            "Chosen driver is not in the registered list, "
-            "make sure there are no typos!"
-            "Use GET settings to look for registered types"
-        )
-
-
 async def pds_activate(context, pds_type, instance_name="default"):
     pds_check_if_driver_is_registered(context.settings, pds_type)
     try:
         pds_to_activate = await SavedPDS.retrieve_type_name(
             context, pds_type, instance_name
         )
-    except StorageNotFoundError as err:
-        raise PDSError("Couldn't find PDS " + err.roll_up)
+    except StorageNotFoundError:
+        raise PDSError("PDS instance not found")
 
     try:
         active_pds = await SavedPDS.retrieve_active(context)
-    except StorageNotFoundError as err:
-        raise PDSError("Couldn't find active PDS " + err.roll_up)
+        active_pds.state = SavedPDS.INACTIVE
+        await active_pds.save(context)
+    except StorageNotFoundError:
+        pass
+    except StorageError as err:
+        raise PDSError(err.roll_up)
 
-    active_pds.state = SavedPDS.INACTIVE
     pds_to_activate.state = SavedPDS.ACTIVE
-
-    await active_pds.save(context)
     await pds_to_activate.save(context)
 
 
@@ -228,13 +241,13 @@ async def pds_post_activate(request: web.BaseRequest):
     driver = body.get("driver", None)
     try:
         await pds_activate(context, driver, instance_name)
-    except PDSError as err:
-        raise web.HTTPNotFound(reason=err.roll_up)
+    except PDSError:
+        return web.json_response(status=404)
 
     return web.json_response()
 
 
-async def pds_get_default_drivers_schema_dris(context):
+async def pds_get_default_drivers_oca_schema_dris(context):
     drivers = context.settings.get("personal_storage_registered_types")
     registered = []
     for key in drivers:
@@ -255,13 +268,7 @@ async def pds_get_default_drivers_schema_dris(context):
 @response_schema(Model.ArrayOfPDSDrivers)
 async def get_pds_drivers(request: web.BaseRequest):
     context = request.app["request_context"]
-
-    # try:
-    #     active_pds = await SavedPDS.retrieve_active(context)
-    # except StorageNotFoundError as err:
-    #     raise web.HTTPNotFound(reason="Couldn't find active storage" + err.roll_up)
-
-    registered = await pds_get_default_drivers_schema_dris(context)
+    registered = await pds_get_default_drivers_oca_schema_dris(context)
     return web.json_response(registered)
 
 
@@ -285,52 +292,30 @@ async def get_active_pds_instance(request: web.BaseRequest):
     return web.json_response(result)
 
 
-class GetMultipleRecordsSchema(Schema):
-    table = fields.Str(required=False)
-    oca_schema_base_dri = fields.Str(required=False)
-
-
-@docs(
-    tags=["PersonalDataStorage"],
-    summary="Retrieve data from a public data storage using data id",
-)
-@querystring_schema(GetMultipleRecordsSchema)
-async def get_multiple_records(request: web.BaseRequest):
-    context = request.app["request_context"]
-    table = request.query.get("table")
-    oca_schema_base_dri = request.query.get("oca_schema_base_dri")
-
-    try:
-        result = await load_multiple(
-            context, table=table, oca_schema_base_dri=oca_schema_base_dri
-        )
-    except PDSError as err:
-        raise web.HTTPInternalServerError(reason=err.roll_up)
-
-    return web.json_response({"success": True, "result": result})
-
-
 class GetMultipleRecordsForOcaSchema(Schema):
-    oca_schema_base_dris = fields.List(fields.Str(required=True), required=True)
+    oca_schema_dri = fields.List(fields.Str(required=True), required=True)
 
 
 @docs(
     tags=["PersonalDataStorage"],
 )
 @querystring_schema(GetMultipleRecordsForOcaSchema)
+@response_schema(Model.ArrayOfOCASchemaChunks)
 async def get_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     dri_list = request.query
-    dri_list = dri_list.getall("oca_schema_base_dris", None)
+    dri_list = dri_list.getall("oca_schema_dri", None)
     if dri_list is None:
         raise web.HTTPBadRequest(reason="Missing data in query parameters")
 
     try:
-        result = await load_multiple(context, oca_schema_base_dri=dri_list)
+        result = await pds_query_by_oca_schema_dri(
+            context, oca_schema_base_dri=dri_list
+        )
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
-    return web.json_response({"success": True, "result": result})
+    return web.json_response(result)
 
 
 class PostMultipleRecordsForOcaSchema(Schema):
@@ -349,11 +334,32 @@ async def post_oca_schema_chunks(request: web.BaseRequest):
         assert isinstance(body, list)
 
     try:
-        result = await pds_save_chunks(context, body)
+        await pds_save_chunks(context, body)
     except PDSError as err:
         raise web.HTTPInternalServerError(err)
 
-    return web.json_response(result)
+    return web.json_response()
+
+
+@docs(
+    tags=["PersonalDataStorage"],
+    summary="Post data in bulk",
+)
+async def test_endpoint(request: web.BaseRequest):
+    context = request.app["request_context"]
+    wallet = await context.inject(BaseWallet)
+
+    key = await wallet.create_signing_key(
+        "rwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc="
+    )
+
+    sign = await wallet.sign_message(bytes([104, 105]), key.verkey)
+    print("Verkey: ", key)
+    print("Signed message: ", sign)
+    sign = list(sign)
+    print("bytes: ", bytes([104, 105]))
+
+    return web.json_response(key)
 
 
 async def register(app: web.Application):
@@ -390,6 +396,11 @@ async def register(app: web.Application):
             web.get(
                 "/pds/oca-schema-chunks/",
                 get_oca_schema_chunks,
+                allow_head=False,
+            ),
+            web.get(
+                "/pds/test/",
+                test_endpoint,
                 allow_head=False,
             ),
             web.post(

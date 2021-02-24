@@ -1,3 +1,4 @@
+from attr import __description__
 from .base import BasePDS
 from .api import encode
 from .error import PDSError, PDSRecordNotFoundError
@@ -17,21 +18,12 @@ LOGGER = logging.getLogger(__name__)
 async def unpack_response(response):
     result: str = await response.text()
     if response.status == 404:
-        LOGGER.error("Error Own Your Data PDS", result)
-        raise PDSRecordNotFoundError("Record not found in Own your data PDS", result)
+        raise PDSRecordNotFoundError(result)
 
     elif response.status != 200:
-        LOGGER.error("Error Own Your Data PDS", result)
-        raise PDSError("Error Own Your Data PDS", result)
+        raise PDSError(result)
 
     return result
-
-
-def get_delimiter(parameter_count_in):
-    if parameter_count_in == 0:
-        return "?"
-    else:
-        return "&"
 
 
 class OwnYourDataVault(BasePDS):
@@ -46,6 +38,24 @@ class OwnYourDataVault(BasePDS):
             "oca_schema_dri": "9bABtmHu628Ss4oHmyTU5gy7QB1VftngewTmh7wdmN1j",
         }
 
+    async def get(self, url):
+        async with ClientSession() as session:
+            result = await session.get(
+                url, headers={"Authorization": "Bearer " + self.token["access_token"]}
+            )
+            result = await unpack_response(result)
+            return result
+
+    async def post(self, url, body):
+        async with ClientSession() as session:
+            response = await session.post(
+                url,
+                headers={"Authorization": "Bearer " + self.token["access_token"]},
+                json=body,
+            )
+            result = await unpack_response(response)
+            return result
+
     async def get_usage_policy(self):
         if self.usage_policy is None:
             await self.update_token()
@@ -53,9 +63,10 @@ class OwnYourDataVault(BasePDS):
         return self.usage_policy
 
     async def update_token(self):
+        LOGGER.info("Begin %s", self.update_token.__name__)
         parsed_url = urlparse(self.settings.get("api_url"))
         self.api_url = "{url.scheme}://{url.netloc}".format(url=parsed_url)
-        LOGGER.debug("API URL OYD %s", self.api_url)
+        LOGGER.debug("URL [ %s ]", self.api_url)
 
         client_id = self.settings.get("client_id")
         client_secret = self.settings.get("client_secret")
@@ -69,14 +80,15 @@ class OwnYourDataVault(BasePDS):
         if client_secret is None:
             raise PDSError("Please configure the plugin, client_secret is empty")
 
+        body = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": grant_type,
+        }
+        if scope is not None:
+            body["scope"] = scope
+
         async with ClientSession() as session:
-            body = {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "grant_type": grant_type,
-            }
-            if scope is not None:
-                body["scope"] = scope
             result = await session.post(
                 self.api_url + "/oauth/token",
                 json=body,
@@ -91,23 +103,19 @@ class OwnYourDataVault(BasePDS):
         Download the usage policy
 
         """
-
+        LOGGER.info("Begin usage policy download %s", self.update_token.__name__)
         url = f"{self.api_url}/api/meta/usage"
-        async with ClientSession() as session:
-            result = await session.get(
-                url,
-                headers={"Authorization": "Bearer " + self.token["access_token"]},
-            )
-            result = await unpack_response(result)
-            self.usage_policy = result
-            LOGGER.debug("Usage policy %s", self.usage_policy)
+        self.usage_policy = await self.get(url)
+        LOGGER.info("usage policy %s", self.usage_policy)
 
     async def update_token_when_expired(self):
+        LOGGER.info("Begin %s", self.update_token_when_expired.__name__)
         time_elapsed = time.time() - (self.token_timestamp - 10)
         if time_elapsed > float(self.token["expires_in"]):
             await self.update_token()
 
     async def load(self, dri: str) -> dict:
+        LOGGER.info("Begin %s", self.load.__name__)
         assert_type(dri, str)
         await self.update_token_when_expired()
 
@@ -121,106 +129,76 @@ class OwnYourDataVault(BasePDS):
 
         return result_dict
 
-    async def save(self, record, metadata: dict) -> str:
+    async def save(self, record, oca_schema_dri) -> str:
+        LOGGER.info("Begin %s", self.save.__name__)
         """
         meta: {
-            "table" - specifies the table name into which save the data
             "oca_schema_dri"
         }
         """
         assert_type_or(record, str, dict)
-        assert_type(metadata, dict)
         await self.update_token_when_expired()
 
-        table = self.settings.get("repo")
-        table = table if table is not None else "dip.data"
+        table = self.settings.get("repo", "dip.data")
+        if oca_schema_dri is not None:
+            assert_type(oca_schema_dri, str)
+            table += "." + oca_schema_dri
+        LOGGER.info("Table name %s", table)
 
-        meta = metadata
         dri_value = None
-
         if isinstance(record, str):
             dri_value = encode(record)
         elif isinstance(record, dict):
             dri_value = encode(json.dumps(record))
+        LOGGER.info("Record DRI %s", dri_value)
 
         record = {
             "content": record,
             "dri": dri_value,
             "timestamp": int(round(time.time() * 1000)),  # current time in milliseconds
         }
-        LOGGER.debug("OYD save record %s metadata %s", record, meta)
-        async with ClientSession() as session:
-            """
-            Pack request body
-            """
+        LOGGER.info("Record: [ %s ]", record)
 
-            if meta.get("table") is not None:
-                table = f"{table}.{meta.get('table')}"
+        body = {
+            "content": record,
+            "dri": dri_value,
+            "table_name": table,
+            "mime_type": "application/json",
+        }
+        LOGGER.info("Request body: [ %s ]", record)
 
-            body = {
-                "content": record,
-                "dri": dri_value,
-                "table_name": table,
-                "mime_type": "application/json",
-            }
-
-            if meta.get("oca_schema_dri") is not None:
-                record["oca_schema_dri"] = meta["oca_schema_dri"]
-                body["schema_dri"] = meta["oca_schema_dri"]
-
-            """
-            Request
-            """
-
-            url = f"{self.api_url}/api/data"
-            response = await session.post(
-                url,
-                headers={"Authorization": "Bearer " + self.token["access_token"]},
-                json=body,
-            )
-            result = await unpack_response(response)
-            result = json.loads(result)
-            LOGGER.debug("Result of POST request %s", result)
+        url = f"{self.api_url}/api/data"
+        result = await self.post(url, body)
+        result = json.loads(result)
+        LOGGER.debug("Result of POST request %s", result)
 
         return dri_value
 
-    async def load_multiple(
-        self, *, table: str = None, oca_schema_base_dri: str = None
-    ):
+    async def query_by_oca_schema_dri(self, oca_schema_dri: str = None):
+        LOGGER.info("Begin %s", self.query_by_oca_schema_dri.__name__)
+        if __debug__:
+            assert_type(oca_schema_dri, str)
+
         await self.update_token_when_expired()
         url = f"{self.api_url}/api/data"
-
         parameter_count = 0
 
-        if table is not None:
-            url = url + get_delimiter(parameter_count) + f"table=dip.data.{table}"
-            parameter_count += 1
-        if oca_schema_base_dri is not None:
-            url = (
-                url
-                + get_delimiter(parameter_count)
-                + f"schema_dri={oca_schema_base_dri}"
-            )
-            parameter_count += 1
+        url = url + f"?table=oca.schema.dri.{oca_schema_dri}"
+        parameter_count += 1
 
-        url = url + get_delimiter(parameter_count) + "f=plain"
+        url = url + "&f=plain"
+        LOGGER.info("URL: [ %s ]", url)
 
-        LOGGER.info("OYD LOAD TABLE url [ %s ]", url)
-        async with ClientSession() as session:
-            result = await session.get(
-                url, headers={"Authorization": "Bearer " + self.token["access_token"]}
-            )
-            result = await unpack_response(result)
-            LOGGER.debug("OYD LOAD TABLE result: [ %s ]", result)
+        result = await self.get(url)
 
         return result
 
-    async def ping(self) -> [bool, str]:
+    async def ping(self) -> [bool, dict]:
         try:
             await self.update_token()
         except (ClientConnectionError, ClientError) as err:
-            return [False, str(err)]
+            return [False, err]
         except PDSError as err:
-            return [False, str(err)]
+            return [False, err]
 
         return [True, None]

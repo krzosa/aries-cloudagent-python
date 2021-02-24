@@ -16,17 +16,10 @@ from aries_cloudagent.aathcf.credentials import (
 )
 from .base import BaseHolder, HolderError
 from aries_cloudagent.pdstorage_thcf.api import (
-    load_multiple,
     pds_load,
-    pds_active_get_full_name,
     pds_save,
-    pds_save_a,
 )
 from aries_cloudagent.pdstorage_thcf.error import PDSNotFoundError
-from aries_cloudagent.pdstorage_thcf.models.table_that_matches_dris_with_pds import (
-    DriStorageMatchTable,
-)
-from aries_cloudagent.storage.error import StorageNotFoundError
 
 CREDENTIALS_TABLE = "credentials"
 
@@ -63,7 +56,6 @@ class PDSHolder(BaseHolder):
             credential_id: Credential id to remove
 
         """
-        pass
 
     async def get_mime_type(
         self, credential_id: str, attr: str = None
@@ -79,7 +71,6 @@ class PDSHolder(BaseHolder):
             attr_meta_json = all_meta.tags.get(attr)
 
         """
-        pass
 
     async def create_presentation(
         self,
@@ -211,7 +202,6 @@ class PDSHolder(BaseHolder):
             A tuple of the credential request and credential request metadata
 
         """
-        pass
 
     async def store_credential(
         self,
@@ -254,10 +244,11 @@ class PDSHolder(BaseHolder):
             raise HolderError("Proof is incorrect, could not verify")
 
         try:
-            record_id = await pds_save_a(
+            # TODO: oca_schema_dri as table
+            record_id = await pds_save(
                 self.context,
                 credential_data,
-                table=CREDENTIALS_TABLE,
+                CREDENTIALS_TABLE,
             )
         except PDSNotFoundError as err:
             raise HolderError(err.roll_up)
@@ -271,21 +262,21 @@ class PDSHolder(BaseHolder):
         needed
 
         """
-        try:
-            query = await load_multiple(self.context, table=CREDENTIALS_TABLE)
-        except PDSNotFoundError as err:
-            raise HolderError(err.roll_up)
+        # try:
+        #     query = await load_multiple(self.context, table=CREDENTIALS_TABLE)
+        # except PDSNotFoundError as err:
+        #     raise HolderError(err.roll_up)
 
-        active_pds = await pds_active_get_full_name(self.context)
-        for i in query:
-            try:
-                await DriStorageMatchTable.retrieve_by_id(self.context, i["dri"])
-            except StorageNotFoundError:
-                await DriStorageMatchTable(i["dri"], active_pds).save(self.context)
+        # active_pds = await pds_active_get_full_name(self.context)
+        # for i in query:
+        #     try:
+        #         await DriStorageMatchTable.retrieve_by_id(self.context, i["dri"])
+        #     except StorageNotFoundError:
+        #         await DriStorageMatchTable(i["dri"], active_pds).save(self.context)
 
-        self.logger.info("Credentials GET CREDENTIALS %s", query)
+        # self.logger.info("Credentials GET CREDENTIALS %s", query)
 
-        return query
+        return ["Not implemented"]
 
     async def create_revocation_state(
         self,
@@ -308,4 +299,3 @@ class PDSHolder(BaseHolder):
             the revocation state
 
         """
-        pass

@@ -8,7 +8,7 @@ from .....messaging.models.base_record import BaseExchangeRecord, BaseExchangeSc
 from .....messaging.valid import UUIDFour
 from aries_cloudagent.aathcf.credentials import PresentationRequestSchema
 from aries_cloudagent.config.injection_context import InjectionContext
-from aries_cloudagent.pdstorage_thcf.api import pds_load, pds_save, pds_save_a
+from aries_cloudagent.pdstorage_thcf.api import pds_load, pds_save
 from collections import OrderedDict
 
 
@@ -141,7 +141,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
         return super().__eq__(other)
 
     async def verifier_ack_cred_pds_set(self, context, credential: OrderedDict):
-        dri = await pds_save_a(context, credential, table="Acknowledgment")
+        dri = await pds_save(context, credential, "Acknowledgment")
         self.acknowledgment_credential_dri = dri
 
     async def ack_cred_pds_get(self, context):
@@ -150,9 +150,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
         return credential
 
     async def presentation_pds_set(self, context, presentation):
-        self.presentation_dri = await pds_save_a(
-            context, presentation, table="Presentation"
-        )
+        self.presentation_dri = await pds_save(context, presentation, "Presentation")
 
     async def presentation_pds_get(self, context):
         if self.presentation_dri is None:

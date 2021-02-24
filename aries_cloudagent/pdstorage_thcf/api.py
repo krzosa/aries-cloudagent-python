@@ -102,48 +102,48 @@ async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
         return result["content"]
 
 
-async def pds_save(context, payload, metadata: str = "{}") -> str:
+async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
     if __debug__:
         assert_type_or(payload, str, dict)
-        assert_type(metadata, str)
+        if oca_schema_dri is not None:
+            assert_type(payload, str)
 
     active_pds_name = await pds_active_get_full_name(context)
     pds = await pds_get_by_full_name(context, active_pds_name)
-    payload_id = await pds.save(payload, json.loads(metadata))
+    payload_id = await pds.save(payload, oca_schema_dri)
     payload_id = await match_save_save_record_id(context, payload_id, active_pds_name)
+
+    if __debug__:
+        assert_type(payload_id, str)
 
     return payload_id
 
 
-async def pds_save_a(
-    context, payload, *, oca_schema_dri: str = None, table: str = None
-) -> str:
+async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
+    """
+    @returns [
+        {
+            "dri": "string",
+            "payload": [
+                {   },
+                {   },
+            ]
+        }
+    ]
+    """
     if __debug__:
-        assert_type_or(payload, str, dict)
+        assert_type_or(oca_schema_dri, str, list)
 
-    meta = {"table": table, "oca_schema_dri": oca_schema_dri}
-    active_pds_name = await pds_active_get_full_name(context)
-    pds = await pds_get_by_full_name(context, active_pds_name)
-    payload_id = await pds.save(payload, meta)
-    payload_id = await match_save_save_record_id(context, payload_id, active_pds_name)
+    if isinstance(oca_schema_dri, str):
+        oca_schema_dri = [oca_schema_dri]
 
-    return payload_id
-
-
-async def load_multiple(context, *, table: str = None, oca_schema_base_dri=None):
-    """ Load multiple records, if oca_schema_base_dri is a list then returns a dictionary"""
     pds = await pds_get_active(context)
-    result = {}
-    if isinstance(oca_schema_base_dri, list):
-        for dri in oca_schema_base_dri:
-            result[dri] = await pds.load_multiple(table=table, oca_schema_base_dri=dri)
-            result[dri] = json.loads(result[dri])
+    result = []
 
-    else:
-        result = await pds.load_multiple(
-            table=table, oca_schema_base_dri=oca_schema_base_dri
-        )
-        result = json.loads(result)
+    for dri in oca_schema_dri:
+        result_record = {"dri": dri}
+        result_record["payload"] = await pds.pds_query_by_oca_schema_dri(oca_schema_dri)
+        result.append(result_record)
 
     return result
 
@@ -161,7 +161,7 @@ async def delete_record(context, id: str) -> str:
 
 async def pds_get_usage_policy_if_active_pds_supports_it(context):
     active_pds_name = await pds_active_get_full_name(context)
-    if active_pds_name[0] != "own_your_data":
+    if active_pds_name[0] != "own_your_data_data_vault":
         return None
 
     pds = await pds_get_by_full_name(context, active_pds_name)
@@ -181,16 +181,14 @@ async def _save_chunks(context, chunks, save_function):
         for chunk_payload in chunk["payload"]:
             if __debug__:
                 assert isinstance(chunk_payload, dict)
-            payload_id = await save_function(
-                context, chunk_payload, oca_schema_dri=chunk_dri
-            )
+            payload_id = await save_function(context, chunk_payload, chunk_dri)
             chunk_payload["_payload_id"] = payload_id
 
     return chunks
 
 
 async def pds_save_chunks(context, chunks):
-    result = await _save_chunks(context, chunks, pds_save_a)
+    result = await _save_chunks(context, chunks, pds_save)
     return result
 
 
@@ -204,29 +202,6 @@ def encode(data: str) -> str:
     return result.decode("utf-8")
 
 
-async def pds_configure_saved_instance(
-    context, driver_name, instance_name, driver_setting
-):
-    if __debug__:
-        assert_type(driver_setting, dict) and driver_setting is not {}
-        assert_type(driver_name, str)
-        assert_type(instance_name, str)
-
-    try:
-        pds = await SavedPDS.retrieve_type_name(context, driver_name, instance_name)
-        pds.settings = driver_setting
-    except StorageNotFoundError:
-        pds = SavedPDS(
-            type=driver_name,
-            name=instance_name,
-            state=SavedPDS.INACTIVE,
-            settings=driver_setting,
-        )
-
-    await pds.save(context)
-    return pds
-
-
 async def pds_configure_instance(context, driver_name, instance_name, driver_setting):
     """Creates a new instance if it doesn't exists"""
     if __debug__:
@@ -236,6 +211,24 @@ async def pds_configure_instance(context, driver_name, instance_name, driver_set
 
     pds = await pds_get(context, driver_name, instance_name)
     pds.settings = driver_setting
+
+    """ Save to db after creating an instance because pds_get
+    invokes the pds provider which checks if pds is even valid"""
+    try:
+        saved_pds = await SavedPDS.retrieve_type_name(
+            context, driver_name, instance_name
+        )
+        saved_pds.settings = driver_setting
+    except StorageNotFoundError:
+        saved_pds = SavedPDS(
+            type=driver_name,
+            name=instance_name,
+            state=SavedPDS.INACTIVE,
+            settings=driver_setting,
+        )
+
+    await saved_pds.save(context)
+
     return pds
 
 
@@ -252,9 +245,6 @@ async def pds_set_setting(
     driver_setting["client_secret"] = client_secret
     driver_setting["client_id"] = client_id
 
-    await pds_configure_saved_instance(
-        context, driver_name, instance_name, driver_setting
-    )
     pds = await pds_configure_instance(
         context, driver_name, instance_name, driver_setting
     )

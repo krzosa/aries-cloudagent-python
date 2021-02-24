@@ -70,11 +70,8 @@ class DataVault(BasePDS):
 
         return response_json["content_dri"]
 
-    async def load_multiple(
-        self, *, table: str = None, oca_schema_base_dri: str = None
-    ) -> str:
-
-        assert not "Load multiple not supported by active PDS"
+    async def query_by_oca_schema_dri(self, oca_schema_dri: str = None) -> str:
+        assert not """Not implemented"""
 
     async def ping(self) -> [bool, str]:
         """

@@ -14,9 +14,9 @@ class TestPDSSettings(AsyncTestCase):
         self.settings = [
             {
                 "driver": {
-                    "name": "own_your_data",
+                    "name": "own_your_data_data_vault",
                     "thcf_data_vault": {"host": "string"},
-                    "own_your_data": {
+                    "own_your_data_data_vault": {
                         "scope": "admin",
                         "grant_type": "client_credentials",
                     },

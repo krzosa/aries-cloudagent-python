@@ -7,7 +7,7 @@ class BasePDS(ABC):
         self.preview_settings = {}
 
     @abstractmethod
-    async def save(self, record, metadata: dict) -> str:
+    async def save(self, record, oca_schema_dri: str = None) -> str:
         """Returns: saved data id, (should maybe return None on key not found?)."""
 
     @abstractmethod
@@ -15,10 +15,8 @@ class BasePDS(ABC):
         """Returns: data represented by id."""
 
     @abstractmethod
-    async def load_multiple(
-        self, *, table: str = None, oca_schema_base_dri: str = None
-    ) -> str:
-        """Load all records from a table."""
+    async def query_by_oca_schema_dri(self, oca_schema_dri: str = None) -> str:
+        """Load all records with specified oca_schema_dri."""
 
     @abstractmethod
     async def ping(self) -> [bool, str]:

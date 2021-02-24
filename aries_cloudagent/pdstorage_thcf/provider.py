@@ -19,9 +19,8 @@ class PersonalDataStorageProvider(BaseProvider):
         assert storage_type[0] is not None, "active personal_storage_type, is None"
         if type(storage_type) == list:
             storage_type = tuple(storage_type)
-        assert isinstance(
-            storage_type, tuple
-        ), f"storage_type is not a tuple, type: {type(storage_type)}, storage_type: {storage_type}"
+        assert isinstance(storage_type, tuple), f"storage_type is not a tuple, type: "
+        f"{type(storage_type)}, storage_type: {storage_type}"
 
         # create a singleton object if there is no object of specified name tuple
         if storage_type not in self.cached_instances:

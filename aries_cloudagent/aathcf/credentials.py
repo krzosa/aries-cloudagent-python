@@ -7,10 +7,9 @@ from marshmallow import fields, Schema
 import json
 import inspect
 from aries_cloudagent.wallet.error import WalletError
-from aiohttp import web
 
 
-def print_line_and_file_at_callsite(indirection_number):
+def get_line_and_file_at_callsite(indirection_number):
     """
     Prints the line and filename.
 
@@ -30,31 +29,33 @@ def print_line_and_file_at_callsite(indirection_number):
     filename = info.filename
     filename = filename.replace("/home/indy/", "")
 
-    print(f"-------------------------------------------------------------------\n")
-    print(f"FILE: {filename}:{info.lineno}")
-    print(f"FUNCTION: {info.function}\n")
-    print(f"-------------------------------------------------------------------")
+    msg = (
+        f"\n-------------------------------------------------------------------\n"
+        f"ASSERT Incorrect type\n"
+        f"FILE: {filename}:{info.lineno}\n"
+        f"-------------------------------------------------------------------\n"
+    )
+    return msg
 
 
 def assert_type(value, Type):
     result = isinstance(value, Type)
     if not result:
-        print_line_and_file_at_callsite(2)
-        print("Value: ", value)
-        assert (
-            0
-        ), f"ERROR: Incorrect type! should be {Type} but is of type {type(value)}"
+        assert 0, (
+            f"ERROR: Incorrect type! should be {Type} but is of type {type(value)}"
+            + get_line_and_file_at_callsite(2)
+        )
 
 
 def assert_type_or(value, Type1, Type2):
     result1 = isinstance(value, Type1)
     result2 = isinstance(value, Type2)
     if not result1 and not result2:
-        print_line_and_file_at_callsite(2)
         print("Value: ", value)
         assert 0, (
             f"ERROR: Incorrect type! should be {Type1}"
             f"or {Type2} but is of type {type(value) }"
+            + get_line_and_file_at_callsite(2)
         )
 
 

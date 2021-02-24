@@ -30,7 +30,7 @@ class TestPDSChunks(AsyncTestCase):
     async def test_oca_schema_chunks(self):
         payload_id = "vas3t3df213:test_payload_id"
 
-        async def stub_save(context, data, *, oca_schema_dri):
+        async def stub_save(context, data, oca_schema_dri):
             context is "unused"
             assert isinstance(data, str) or isinstance(data, dict)
             assert isinstance(oca_schema_dri, str)

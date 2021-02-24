@@ -5,8 +5,10 @@ import functools
 import logging
 import os
 import signal
+import time
 from argparse import ArgumentParser
 from typing import Coroutine, Sequence
+import cProfile
 
 try:
     import uvloop
@@ -25,12 +27,15 @@ async def start_app(conductor: Conductor):
     """Start up."""
     await conductor.setup()
     await conductor.start()
+    print("Startup Time:", time.time() - global_app_start_time)
 
 
 async def shutdown_app(conductor: Conductor):
     """Shut down."""
     print("\nShutting down")
+    stop_time = time.time()
     await conductor.stop()
+    print("App stopping time: ", time.time() - stop_time)
 
 
 def init_argument_parser(parser: ArgumentParser):
@@ -40,6 +45,8 @@ def init_argument_parser(parser: ArgumentParser):
 
 def execute(argv: Sequence[str] = None):
     """Entrypoint."""
+    global global_app_start_time
+    global_app_start_time = time.time()
     parser = ArgumentParser()
     parser.prog += " start"
     get_settings = init_argument_parser(parser)
@@ -51,7 +58,7 @@ def execute(argv: Sequence[str] = None):
     settings["personal_storage_registered_types"] = {
         "local": "aries_cloudagent.pdstorage_thcf.local.LocalPDS",
         "thcf_data_vault": "aries_cloudagent.pdstorage_thcf.thcf_data_vault.DataVault",
-        "own_your_data": "aries_cloudagent.pdstorage_thcf.own_your_data.OwnYourDataVault",
+        "own_your_data_data_vault": "aries_cloudagent.pdstorage_thcf.own_your_data_data_vault.OwnYourDataVault",
     }
 
     # set ledger to read only if explicitely specified
@@ -72,6 +79,7 @@ def execute(argv: Sequence[str] = None):
     if uvloop:
         uvloop.install()
         print("uvloop installed")
+
     run_loop(start_app(conductor), shutdown_app(conductor))
 
 

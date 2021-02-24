@@ -19,7 +19,7 @@ from .messages.present_proof import PresentProof
 from .models.utils import retrieve_exchange
 import logging
 from aries_cloudagent.pdstorage_thcf.api import (
-    load_multiple,
+    pds_query_by_oca_schema_dri,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
@@ -246,11 +246,10 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
     """
 
     try:
-        credentials = await load_multiple(context, table=CREDENTIALS_TABLE)
+        credentials = await pds_query_by_oca_schema_dri(context, CREDENTIALS_TABLE)
     except json.JSONDecodeError:
         LOGGER.warn(
             "Error parsing credentials, perhaps there are no credentials in store %s",
-            credentials,
         )
         credentials = {}
     except PDSError as err:
