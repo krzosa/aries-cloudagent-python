@@ -115,24 +115,26 @@ async def get_record_from_agent(request: web.BaseRequest):
 
 
 def pds_check_if_driver_is_registered(settings, pds_driver):
+    """
+    Returns on fail: message
+    Returns on success: None
+    """
     check_if_pds_driver_is_registered = settings.get_value(
         "personal_storage_registered_types"
     )
 
-    if check_if_pds_driver_is_registered is None:
-        raise web.HTTPInternalServerError(reason="List of PDSes is not initialized!")
+    if __debug__:
+        if check_if_pds_driver_is_registered is None:
+            assert not "List of PDSes is not initialized!"
 
     check_if_pds_driver_is_registered = check_if_pds_driver_is_registered.get(
         pds_driver
     )
 
     if check_if_pds_driver_is_registered is None:
-        msg = (
-            "Chosen driver is not in the registered list, "
-            "make sure there are no typos!"
-            "Use GET settings to look for registered types."
-        )
-        raise web.HTTPNotFound(reason=msg)
+        return "PDS driver not found"
+
+    return None
 
 
 @docs(
@@ -147,7 +149,9 @@ async def set_settings(request: web.BaseRequest):
     driver = body.get("driver")
     driver_name = driver.get("name")
     driver_setting = driver.get(driver_name)
-    pds_check_if_driver_is_registered(context.settings, driver_name)
+    msg = pds_check_if_driver_is_registered(context.settings, driver_name)
+    if msg is not None:
+        raise web.HTTPNotFound(reason=msg)
 
     try:
         connected, exception = await pds_set_setting(
@@ -207,7 +211,10 @@ async def get_settings(request: web.BaseRequest):
 
 
 async def pds_activate(context, pds_type, instance_name="default"):
-    pds_check_if_driver_is_registered(context.settings, pds_type)
+    msg = pds_check_if_driver_is_registered(context.settings, pds_type)
+    if msg is not None:
+        raise PDSError(msg)
+
     try:
         pds_to_activate = await SavedPDS.retrieve_type_name(
             context, pds_type, instance_name
@@ -220,7 +227,7 @@ async def pds_activate(context, pds_type, instance_name="default"):
         active_pds.state = SavedPDS.INACTIVE
         await active_pds.save(context)
     except StorageNotFoundError:
-        pass
+        assert not "ERROR! There is no active PDS instance"
     except StorageError as err:
         raise PDSError(err.roll_up)
 
@@ -305,8 +312,12 @@ async def get_oca_schema_chunks(request: web.BaseRequest):
     context = request.app["request_context"]
     dri_list = request.query
     dri_list = dri_list.getall("oca_schema_dri", None)
-    if dri_list is None:
-        raise web.HTTPBadRequest(reason="Missing data in query parameters")
+
+    if __debug__:
+        if dri_list is None:
+            raise web.HTTPBadRequest(
+                reason="Missing data in query parameters. Fix marshmallow schema"
+            )
 
     try:
         result = await pds_query_by_oca_schema_dri(context, dri_list)

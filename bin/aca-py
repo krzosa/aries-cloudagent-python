@@ -21,10 +21,9 @@ if ENABLE_PTVSD or "--debug" in sys.argv:
         import ptvsd
 
         ptvsd.enable_attach()
-        print("ptvsd is running")
-        print("=== Waiting for debugger to attach ===")
-        # To pause execution until the debugger is attached:
         if "--debug-wait" in sys.argv:
+            print("ptvsd is running")
+            print("=== Waiting for debugger to attach ===")
             ptvsd.wait_for_attach()
     except ImportError:
         print("ptvsd library was not found")
