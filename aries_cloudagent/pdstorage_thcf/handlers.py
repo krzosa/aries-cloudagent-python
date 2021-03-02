@@ -1,6 +1,5 @@
+from .error import PDSNotFoundError
 from .api import pds_load_string
-from .base import *
-from .error import PDSError, PDSNotFoundError
 from .message_types import ExchangeDataB, ExchangeDataA
 from aries_cloudagent.messaging.base_handler import (
     BaseHandler,

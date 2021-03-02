@@ -181,12 +181,6 @@ class DebugGroup(ArgumentGroup):
             using ptvsd for Visual Studio Code. Default: false.",
         )
         parser.add_argument(
-            "--debug-wait",
-            action="store_true",
-            help="Needs --debug flag to work. Server waits for debugger attach\
-                before launching the application.",
-        )
-        parser.add_argument(
             "--debug-seed",
             dest="debug_seed",
             type=str,

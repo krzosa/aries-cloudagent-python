@@ -20,4 +20,4 @@ class TestOYD(AsyncTestCase):
         pds.get = MethodType(get, pds)
         await pds.query_by_oca_schema_dri("1234")
         awaitable = pds.query_by_oca_schema_dri(["1234"])
-        self.assertAsyncRaises(AssertionError, awaitable)
+        await self.assertAsyncRaises(AssertionError, awaitable)

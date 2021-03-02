@@ -1,11 +1,10 @@
 from ...messaging.models.base_record import BaseRecord, BaseRecordSchema
 from ...storage.base import BaseStorage
-from marshmallow import fields, Schema
+from marshmallow import fields
 from aries_cloudagent.messaging.util import time_now
 from aries_cloudagent.storage.error import StorageDuplicateError
 from ...config.injection_context import InjectionContext
-from typing import Any, Mapping, Sequence, Union
-import uuid
+from typing import Any, Mapping
 
 
 class DriStorageMatchTable(BaseRecord):
@@ -21,7 +20,7 @@ class DriStorageMatchTable(BaseRecord):
         pds_type: tuple,
         **keywordArgs,
     ):
-        super().__init__(dri)
+        super().__init__(dri, **keywordArgs)
         self.pds_type = pds_type
 
     @property
@@ -51,7 +50,7 @@ class DriStorageMatchTable(BaseRecord):
         try:
             self.updated_at = time_now()
             storage: BaseStorage = await context.inject(BaseStorage)
-            
+
             await storage.add_record(self.storage_record)
             new_record = True
         except StorageDuplicateError:

@@ -13,9 +13,11 @@ from .api import (
     pds_get,
     pds_get_by_full_name,
     pds_load,
+    pds_load_model,
     pds_query_by_oca_schema_dri,
     pds_save,
     pds_save_chunks,
+    pds_save_model,
     pds_set_setting,
 )
 from .error import PDSError
@@ -47,7 +49,7 @@ class GetSettingsSchema(Schema):
     )
 
 
-@docs(tags=["PersonalDataStorage"], summary="Save data in a public data storage")
+@docs(tags=["Personal Data Storage"], summary="Save data in a public data storage")
 @request_schema(Model.Payload)
 @response_schema(Model.DRIResponse)
 async def save_record(request: web.BaseRequest):
@@ -66,7 +68,7 @@ async def save_record(request: web.BaseRequest):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Retrieve data from a public data storage using data id",
 )
 @response_schema(Model.Payload)
@@ -99,7 +101,7 @@ async def pds_request_record_from_other_agent_ex(request, connection_id, payload
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Retrieve data from a public data storage using data id",
 )
 @querystring_schema(GetRecordFromAgentSchema())
@@ -138,8 +140,8 @@ def pds_check_if_driver_is_registered(settings, pds_driver):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
-    summary="Set and configure current PersonalDataStorage",
+    tags=["Personal Data Storage"],
+    summary="Set and configure current Personal Data Storage",
 )
 @request_schema(Model.PDSSetting)
 async def set_settings(request: web.BaseRequest):
@@ -192,7 +194,7 @@ def unpack_pds_settings_to_user_facing_schema(list_of_pds):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Get all registered public storage types and show their configuration",
 )
 @response_schema(Model.ArrayOfPDSSettings)
@@ -236,7 +238,7 @@ async def pds_activate(context, pds_type, instance_name="default"):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Set a public data storage type by name",
     description="for example: 'local', get possible types by calling 'GET /pds' endpoint",
 )
@@ -269,7 +271,7 @@ async def pds_get_default_drivers_oca_schema_dris(context):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Get all registered public storage types, get which storage_type is active",
 )
 @response_schema(Model.ArrayOfPDSDrivers)
@@ -280,7 +282,7 @@ async def get_pds_drivers(request: web.BaseRequest):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Get active PDS instance",
 )
 @response_schema(Model.ArrayOfPDSDrivers)
@@ -304,7 +306,7 @@ class GetMultipleRecordsForOcaSchema(Schema):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
 )
 @querystring_schema(GetMultipleRecordsForOcaSchema)
 @response_schema(Model.ArrayOfOCASchemaChunks)
@@ -332,7 +334,7 @@ class PostMultipleRecordsForOcaSchema(Schema):
 
 
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Post data in bulk",
 )
 @request_schema(Model.ArrayOfOCASchemaChunks)
@@ -350,12 +352,28 @@ async def post_oca_schema_chunks(request: web.BaseRequest):
     return web.json_response()
 
 
+class TestClass(Schema):
+    data: fields.Str()
+    data2: fields.Str()
+
+
 @docs(
-    tags=["PersonalDataStorage"],
+    tags=["Personal Data Storage"],
     summary="Post data in bulk",
 )
 async def test_endpoint(request: web.BaseRequest):
     context = request.app["request_context"]
+
+    test = TestClass().from_dict({"data": "str", "data2": "asafa"})
+    print("Initial data", test)
+    print("SUBCLASS:", issubclass(test, TestClass))
+
+    payload_id = await pds_save_model(context, test)
+    print("Payload id", payload_id)
+
+    result = await pds_load_model(context, payload_id, TestClass)
+    print(result)
+
     wallet = await context.inject(BaseWallet)
 
     key = await wallet.create_signing_key(

@@ -1,3 +1,4 @@
+from aries_cloudagent.messaging.models.base_record import BaseRecord
 from .base import BasePDS
 from .error import PDSError, PDSNotFoundError
 from .models.saved_personal_storage import SavedPDS
@@ -5,9 +6,11 @@ import hashlib
 import multihash
 import logging
 import multibase
+import inspect
 from aries_cloudagent.storage.error import StorageNotFoundError
 from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
 from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
+import marshmallow
 import json
 from collections import OrderedDict
 
@@ -118,6 +121,42 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
         assert_type(payload_id, str)
 
     return payload_id
+
+
+async def pds_save_model(
+    context,
+    model,
+    oca_schema_dri: str = None,
+):
+    if __debug__:
+        assert not isinstance(model, (str, dict, tuple))
+
+    serialized = None
+    if issubclass(type(model), BaseRecord):
+        serialized = model.value
+    else:
+        serialized = model.__dict__
+
+    if __debug__:
+        assert isinstance(serialized, dict)
+
+    result = await pds_save(context, serialized, oca_schema_dri)
+    return result
+
+
+async def pds_load_model(context, id: str, model_class):
+    if __debug__:
+        assert isinstance(id, str)
+
+    load = await pds_load(context, id)
+
+    result = None
+    result = model_class(**load)
+
+    if __debug__:
+        assert isinstance(result, model_class)
+
+    return result
 
 
 async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):

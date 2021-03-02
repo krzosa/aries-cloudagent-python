@@ -225,7 +225,7 @@ class OCASchemaDRIDataTuple(OCASchema):
 
 class Consent(OCASchemaDRIDataTuple):
     label = fields.String(required=True)
-    consent_uuid = fields.String(required=True, allow_none=True)
+    consent_uuid = fields.String(allow_none=True)
 
 
 class ArrayOfConsents(Consent):
@@ -233,29 +233,6 @@ class ArrayOfConsents(Consent):
         kwargs['many'] = True
         super().__init__(*args, **kwargs)
 
-
-
-class Service(OpenAPISchema):
-    uuid = fields.UUID(required=True)
-    label = fields.String(required=True)
-    updated_at = fields.String(allow_none=True)
-    created_at = fields.String(allow_none=True)
-    service_schema_dri = fields.String(required=True, description='OCA Schema DRI')
-
-
-class DefinedService(Service):
-    consent = fields.Nested(lambda: OCASchemaDRIDataTuple(), required=True)
-
-
-class ArrayOfDefinedServices(DefinedService):
-    def __init__(self, *args, **kwargs):
-        kwargs['many'] = True
-        super().__init__(*args, **kwargs)
-
-
-
-class NewService(Service):
-    consent_uuid = fields.UUID(required=True)
 
 
 class Document(OpenAPISchema):
@@ -300,6 +277,27 @@ class DocumentProof(OpenAPISchema):
 class Documentxcontext(PrimitiveValueSchema):
     class schema_class(OpenAPISchema):
         value = fields.List(fields.String())
+
+
+
+class BaseService(OpenAPISchema):
+    consent_uuid = fields.UUID(required=True)
+    service_schema_dri = fields.String(required=True)
+    label = fields.String(required=True)
+
+
+class Service(BaseService):
+    service_uuid = fields.UUID(required=True)
+    updated_at = fields.String(allow_none=True)
+    created_at = fields.String(allow_none=True)
+    label = fields.String(required=True)
+    service_schema_dri = fields.String(required=True, description='OCA Schema DRI')
+
+
+class ArrayOfServices(Service):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
 
 
 
@@ -469,8 +467,19 @@ class ServicesInput:
         """
 
         class Query(OpenAPISchema):
-            connection_id = fields.Field(description='leave blank if you want to see your services')
-            service_id = fields.Field(description='query a single, specific record')
+            connection_id = fields.Field(description="\\'mine\\' to show my services")
+
+
+
+
+class ServicesServiceUuidInput:
+    class Delete:
+        """
+        Removes service by its uuid
+        """
+
+        class Path(OpenAPISchema):
+            service_uuid = fields.Field(required=True)
 
 
 
@@ -492,18 +501,6 @@ class ServicesApplyInput:
         """
 
         pass
-
-
-
-class ServicesServiceUuidInput:
-    class Delete:
-        """
-        Removes service by its uuid
-        """
-
-        class Path(OpenAPISchema):
-            service_uuid = fields.Field(required=True)
-
 
 
 
