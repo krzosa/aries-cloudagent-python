@@ -6,18 +6,18 @@ pds_load = api.pds_load
 pds_save = api.pds_save
 
 
-class TestModel:
+class _TestModel:
     def __init__(self, field1, field2):
         self.field1 = field1
         self.field2 = field2
 
 
-class TestBaseRecord(BaseRecord):
+class _TestBaseRecord(BaseRecord):
     RECORD_ID_NAME = "record_id"
     RECORD_TYPE = "defined_consent"
 
     class Meta:
-        schema_class = "TestBaseRecordSchema"
+        schema_class = "_TestBaseRecordSchema"
 
     def __init__(
         self,
@@ -48,11 +48,11 @@ class TestPDSApi(AsyncTestCase):
             "pds_name": "test_pds_name",
             "state": "1234-state",
         }
-        self.acapy_record = TestBaseRecord(**self.acapy_record_dict)
+        self.acapy_record = _TestBaseRecord(**self.acapy_record_dict)
 
     async def test_pds_save_model(self):
         data = {"field1": "str1", "field2": "str2"}
-        model = TestModel(**data)
+        model = _TestModel(**data)
 
         async def pds_save_stub(context, payload, dri):
             assert payload == model.__dict__
@@ -77,21 +77,21 @@ class TestPDSApi(AsyncTestCase):
             return data
 
         api.pds_load = pds_load_stub
-        result = await api.pds_load_model(None, self_id, TestModel)
+        result = await api.pds_load_model(None, self_id, _TestModel)
         assert result.__dict__ == data
 
         async def pds_load_stub_invalid(context, id):
             return {"invalid": "data"}
 
         api.pds_load = pds_load_stub_invalid
-        awaitable = api.pds_load_model(None, self_id, TestModel)
+        awaitable = api.pds_load_model(None, self_id, _TestModel)
         await self.assertAsyncRaises(TypeError, awaitable)
 
         async def pds_load_stub_invalid(context, id):
             return {"field1": "data"}
 
         api.pds_load = pds_load_stub_invalid
-        awaitable = api.pds_load_model(None, self_id, TestModel)
+        awaitable = api.pds_load_model(None, self_id, _TestModel)
         await self.assertAsyncRaises(TypeError, awaitable)
 
     async def test_pds_load_acapy_record(self):
@@ -99,7 +99,7 @@ class TestPDSApi(AsyncTestCase):
             return self.acapy_record_dict
 
         api.pds_load = pds_load_stub
-        result = await api.pds_load_model(None, "1234", TestBaseRecord)
+        result = await api.pds_load_model(None, "1234", _TestBaseRecord)
         assert result == self.acapy_record
 
     async def test_pds_save_acapy_record(self):
@@ -110,3 +110,41 @@ class TestPDSApi(AsyncTestCase):
         api.pds_save = pds_save_stub
         result = await api.pds_save_model(None, self.acapy_record)
         assert result == "12345"
+
+    async def test_pds_load_recursive(self):
+
+        payload_dri_1234 = {
+            "consent_dri": "12345",
+            "test_data": "abc",
+            "dict": {"consent_dri": "12345"},
+        }
+
+        payload_dri_12345 = {
+            "test_data_2222": "abcasdasd",
+        }
+
+        final_dict = {
+            "consent": {
+                "test_data_2222": "abcasdasd",
+            },
+            "consent_dri": "12345",
+            "test_data": "abc",
+            "dict": {
+                "consent_dri": "12345",
+                "consent": {
+                    "test_data_2222": "abcasdasd",
+                },
+            },
+        }
+
+        async def pds_load_stub(context, payload_dri):
+            if payload_dri == "1234":
+                return payload_dri_1234
+            elif payload_dri == "12345":
+                return payload_dri_12345
+            else:
+                assert not "invalid codepath"
+
+        api.pds_load = pds_load_stub
+        result = await api.pds_load_recursive(None, "1234")
+        assert result == final_dict

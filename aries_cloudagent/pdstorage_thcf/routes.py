@@ -352,9 +352,10 @@ async def post_oca_schema_chunks(request: web.BaseRequest):
     return web.json_response()
 
 
-class TestClass(Schema):
-    data: fields.Str()
-    data2: fields.Str()
+class TestModel:
+    def __init__(self, field1, field2):
+        self.field1 = field1
+        self.field2 = field2
 
 
 @docs(
@@ -364,30 +365,28 @@ class TestClass(Schema):
 async def test_endpoint(request: web.BaseRequest):
     context = request.app["request_context"]
 
-    test = TestClass().from_dict({"data": "str", "data2": "asafa"})
-    print("Initial data", test)
-    print("SUBCLASS:", issubclass(test, TestClass))
+    test = TestModel("1234", "asdaf")
 
     payload_id = await pds_save_model(context, test)
     print("Payload id", payload_id)
 
-    result = await pds_load_model(context, payload_id, TestClass)
+    result = await pds_load_model(context, payload_id, TestModel)
     print(result)
 
-    wallet = await context.inject(BaseWallet)
+    # wallet = await context.inject(BaseWallet)
 
-    key = await wallet.create_signing_key(
-        "rwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc="
-    )
+    # key = await wallet.create_signing_key(
+    #     "rwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc="
+    # )
 
-    sign = await wallet.sign_message(bytes([104, 105]), key.verkey)
+    # sign = await wallet.sign_message(bytes([104, 105]), key.verkey)
 
-    print("Verkey: ", key)
-    print("Signed message: ", sign)
-    sign = list(sign)
-    print("bytes: ", bytes([104, 105]))
+    # print("Verkey: ", key)
+    # print("Signed message: ", sign)
+    # sign = list(sign)
+    # print("bytes: ", bytes([104, 105]))
 
-    return web.json_response(key)
+    return web.json_response(result.__dict__)
 
 
 async def register(app: web.Application):

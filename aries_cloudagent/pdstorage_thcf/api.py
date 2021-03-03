@@ -6,11 +6,9 @@ import hashlib
 import multihash
 import logging
 import multibase
-import inspect
 from aries_cloudagent.storage.error import StorageNotFoundError
 from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
 from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
-import marshmallow
 import json
 from collections import OrderedDict
 
@@ -33,8 +31,6 @@ async def match_table_query_id(context, id):
                 f"input id: {id}\n",
                 f"ERROR: {err.roll_up}",
             )
-            # debug_all_records = await DriStorageMatchTable.query(context)
-            # LOGGER.error("All records in table: ", debug_all_records)
         raise PDSNotFoundError(err)
 
     return match
@@ -321,3 +317,30 @@ async def pds_set_settings(context, settings: list):
             message["exception"] = exception
         messages.append(message)
     return messages
+
+
+async def pds_load_item_recursive_(context, key, value):
+    new_val = value
+    if isinstance(value, dict):
+        new_val = await pds_load_dict_recursive(context, value)
+    elif key.endswith("_dri"):
+        new_val = await pds_load(context, value)
+        new_val = await pds_load_dict_recursive(context, new_val)
+    return new_val
+
+
+async def pds_load_dict_recursive(context, dictionary):
+    new_dict = {}
+    for key, value in dictionary.items():
+        if key.endswith("_dri"):
+            new_dict[key[:-4]] = await pds_load_item_recursive_(context, key, value)
+            new_dict[key] = value
+        else:
+            new_dict[key] = await pds_load_item_recursive_(context, key, value)
+
+    return new_dict
+
+
+async def pds_load_recursive(context, payload_dri):
+    result = await pds_load_dict_recursive(context, {"payload_dri": payload_dri})
+    return result["payload"]
