@@ -117,6 +117,7 @@ class TestPDSApi(AsyncTestCase):
             "consent_dri": "12345",
             "test_data": "abc",
             "dict": {"consent_dri": "12345"},
+            "consent_schema_dri": "123",
         }
 
         payload_dri_12345 = {
@@ -128,6 +129,7 @@ class TestPDSApi(AsyncTestCase):
                 "test_data_2222": "abcasdasd",
             },
             "consent_dri": "12345",
+            "consent_schema_dri": "123",
             "test_data": "abc",
             "dict": {
                 "consent_dri": "12345",

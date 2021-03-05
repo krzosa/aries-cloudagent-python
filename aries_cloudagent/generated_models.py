@@ -281,7 +281,7 @@ class Documentxcontext(PrimitiveValueSchema):
 
 
 class BaseService(OpenAPISchema):
-    consent_uuid = fields.UUID(required=True)
+    consent_uuid = fields.String(required=True)
     service_schema_dri = fields.String(required=True)
     label = fields.String(required=True)
 
@@ -473,6 +473,15 @@ class ServicesInput:
 
 
 class ServicesServiceUuidInput:
+    class Get:
+        """
+        Retrieve services by id
+        """
+
+        class Path(OpenAPISchema):
+            service_uuid = fields.Field(required=True)
+
+
     class Delete:
         """
         Removes service by its uuid

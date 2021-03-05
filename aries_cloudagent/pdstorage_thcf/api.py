@@ -7,33 +7,11 @@ import multihash
 import logging
 import multibase
 from aries_cloudagent.storage.error import StorageNotFoundError
-from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
 from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
 import json
 from collections import OrderedDict
 
 LOGGER = logging.getLogger(__name__)
-
-
-async def match_save_save_record_id(context, record_id, pds_name):
-    match_table = DriStorageMatchTable(record_id, pds_name)
-    record_id = await match_table.save(context)
-    return record_id
-
-
-async def match_table_query_id(context, id):
-    try:
-        match = await DriStorageMatchTable.retrieve_by_id(context, id)
-    except StorageNotFoundError as err:
-        if __debug__:
-            LOGGER.error(
-                f"table_that_matches_plugins_with_ids id that matches with None value\n",
-                f"input id: {id}\n",
-                f"ERROR: {err.roll_up}",
-            )
-        raise PDSNotFoundError(err)
-
-    return match
 
 
 async def pds_active_get_full_name(context):
@@ -71,8 +49,7 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
     if __debug__:
         assert_type(id, str)
 
-    match = await match_table_query_id(context, id)
-    pds = await pds_get_by_full_name(context, match.pds_type)
+    pds = await pds_get_active(context)
     result = await pds.load(id)
 
     try:
@@ -92,8 +69,7 @@ async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
     if __debug__:
         assert_type(id, str)
 
-    match = await match_table_query_id(context, id)
-    pds = await pds_get_by_full_name(context, match.pds_type)
+    pds = await pds_get_active(context)
     result = await pds.load(id)
 
     if with_meta:
@@ -145,12 +121,30 @@ async def pds_load_model(context, id: str, model_class):
         assert isinstance(id, str)
 
     load = await pds_load(context, id)
-
-    result = None
-    result = model_class(**load)
+    try:
+        result = model_class(**load)
+    except KeyError:
+        raise PDSError("Invalid data to model mapping. Incorrect data structure.")
 
     if __debug__:
         assert isinstance(result, model_class)
+
+    return result
+
+
+async def pds_query_model_by_oca_schema_dri(context, oca_schema_dri):
+    if __debug__:
+        assert isinstance(oca_schema_dri, str)
+
+    pds = await pds_get_active(context)
+
+    response = await pds.query_by_oca_schema_dri(oca_schema_dri)
+    result = []
+    for i in response:
+        content = i["content"]
+        assert content.get("dri") is None
+        content["dri"] = i["dri"]
+        result.append(content)
 
     return result
 
@@ -180,8 +174,7 @@ async def delete_record(context, id: str) -> str:
     if __debug__:
         assert_type(id, str)
 
-    match = await match_table_query_id(context, id)
-    pds = await pds_get_by_full_name(context, match.pds_type)
+    pds = await pds_get_active(context)
     result = await pds.delete(id)
 
     return result
@@ -323,7 +316,7 @@ async def pds_load_item_recursive_(context, key, value):
     new_val = value
     if isinstance(value, dict):
         new_val = await pds_load_dict_recursive(context, value)
-    elif key.endswith("_dri"):
+    elif key.endswith("_dri") and (not key.endswith("schema_dri")):
         new_val = await pds_load(context, value)
         new_val = await pds_load_dict_recursive(context, new_val)
     return new_val
@@ -332,7 +325,7 @@ async def pds_load_item_recursive_(context, key, value):
 async def pds_load_dict_recursive(context, dictionary):
     new_dict = {}
     for key, value in dictionary.items():
-        if key.endswith("_dri"):
+        if key.endswith("_dri") and (not key.endswith("schema_dri")):
             new_dict[key[:-4]] = await pds_load_item_recursive_(context, key, value)
             new_dict[key] = value
         else:

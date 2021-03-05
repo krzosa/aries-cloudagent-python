@@ -183,7 +183,7 @@ class OwnYourDataVault(BasePDS):
         url = f"{self.api_url}/api/data"
         parameter_count = 0
 
-        url = url + f"?table=oca.schema.dri.{oca_schema_dri}"
+        url = url + f"?table=dip.data.{oca_schema_dri}"
         parameter_count += 1
 
         url = url + "&f=plain"
@@ -192,6 +192,8 @@ class OwnYourDataVault(BasePDS):
         result = await self.get(url)
         if result == "[]":
             result = [{}]
+
+        result = json.loads(result)
 
         return result
 

@@ -255,26 +255,6 @@ class PDSHolder(BaseHolder):
         return record_id
 
     async def get_credentials(self) -> list:
-        """
-        Retrieve credential list based on a filter(TODO)
-
-        FIXME This is ideally only for debug? so maybe pages are not
-        needed
-
-        """
-        # try:
-        #     query = await load_multiple(self.context, table=CREDENTIALS_TABLE)
-        # except PDSNotFoundError as err:
-        #     raise HolderError(err.roll_up)
-
-        # active_pds = await pds_active_get_full_name(self.context)
-        # for i in query:
-        #     try:
-        #         await DriStorageMatchTable.retrieve_by_id(self.context, i["dri"])
-        #     except StorageNotFoundError:
-        #         await DriStorageMatchTable(i["dri"], active_pds).save(self.context)
-
-        # self.logger.info("Credentials GET CREDENTIALS %s", query)
 
         return ["Not implemented"]
 
