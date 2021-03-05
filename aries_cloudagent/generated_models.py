@@ -95,6 +95,42 @@ class OpenAPISchema(Schema):
         unknown = EXCLUDE
 
     
+class ArrayOfCredentialDRIItem(OpenAPISchema):
+    dri = fields.String(required=True)
+
+
+class ArrayOfCredentialDRI(ArrayOfCredentialDRIItem):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
+
+
+
+class PresentationRequest(OpenAPISchema):
+    uuid = fields.UUID(allow_none=True)
+    oca_schema_dri = fields.String(required=True)
+    connection_uuid = fields.String(required=True)
+
+
+class ArrayOfPresentationRequests(PresentationRequest):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
+
+
+
+class Presentation(OpenAPISchema):
+    presentation = fields.Dict(keys=fields.String(), values=fields.String())
+    connection_uuid = fields.String()
+
+
+class ArrayOfPresentations(Presentation):
+    def __init__(self, *args, **kwargs):
+        kwargs['many'] = True
+        super().__init__(*args, **kwargs)
+
+
+
 class PDSActivate(OpenAPISchema):
     instance_name = fields.String(required=True)
     driver = fields.String(required=True, validate=[OneOf(choices=['own_your_data_data_vault', 'own_your_data_sem_con', 'thcf_data_vault', 'local'], labels=[])])
@@ -475,7 +511,7 @@ class ServicesInput:
 class ServicesServiceUuidInput:
     class Get:
         """
-        Retrieve services by id
+        Retrieve service by id
         """
 
         class Path(OpenAPISchema):
@@ -533,6 +569,26 @@ class DocumentsMineconsentsInput:
 
 
 
+class DocumentsGivenpresentationsInput:
+    class Get:
+        """
+        Retrieve all presentations given to other agent's
+        """
+
+        pass
+
+
+
+class DocumentsMinepresentationsInput:
+    class Get:
+        """
+        Retrieve all presentations I have received
+        """
+
+        pass
+
+
+
 class DocumentsGivenInput:
     class Get:
         """
@@ -550,3 +606,89 @@ class DocumentsMineInput:
         """
 
         pass
+
+
+
+class PresentationrequestsInput:
+    class Get:
+        """
+        Retrieves all presentations requests that are addressed to me.
+        """
+
+        pass
+
+    class Post:
+        """
+        Request my agent to send a presentation request to another agent
+        """
+
+        pass
+
+
+
+class PresentationrequestsPresentationRequestUuidMatchingdocumentsInput:
+    class Get:
+        """
+        Retrieves all presentations requests that are addressed to me.
+        """
+
+        class Path(OpenAPISchema):
+            presentation_request_uuid = fields.Field(required=True)
+
+
+
+
+class PresentationrequestsPresentationRequestUuidAcceptInput:
+    class Put:
+        """
+        Accepts given presentation request
+        """
+
+        class Path(OpenAPISchema):
+            presentation_request_uuid = fields.Field(required=True)
+
+
+
+
+class PresentationrequestsPresentationRequestUuidRejectInput:
+    class Put:
+        """
+        Rejects given presentation request
+        """
+
+        class Path(OpenAPISchema):
+            presentation_request_uuid = fields.Field(required=True)
+
+
+
+
+class PresentationsInput:
+    class Get:
+        """
+        Request my agent to send a presentation request to another agent
+        """
+
+        pass
+
+
+
+class PresentationsPresentationUuidAcceptInput:
+    class Put:
+        """
+        Accepts given presentation, which in return provides confirmation VC.
+        """
+
+        class Path(OpenAPISchema):
+            presentation_uuid = fields.Field(required=True)
+
+
+
+
+class PresentationsPresentationUuidRejectInput:
+    class Put:
+        """
+        Rejects given presentation, which in return provides confirmation VC.
+        """
+
+        class Path(OpenAPISchema):
+            presentation_uuid = fields.Field(required=True)

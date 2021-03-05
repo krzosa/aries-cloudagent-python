@@ -87,7 +87,6 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
     active_pds_name = await pds_active_get_full_name(context)
     pds = await pds_get_by_full_name(context, active_pds_name)
     payload_id = await pds.save(payload, oca_schema_dri)
-    payload_id = await match_save_save_record_id(context, payload_id, active_pds_name)
 
     if __debug__:
         assert_type(payload_id, str)

@@ -66,7 +66,7 @@ async def request_presentation_api(request: web.BaseRequest):
     body = await request.json()
 
     connection_id = body.get("connection_id")
-    await retrieve_connection(context, connection_id)  # throw exception if not found
+    await retrieve_connection(context, connection_id)
 
     presentation_request = {
         "requested_attributes": body.get("requested_attributes"),
