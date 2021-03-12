@@ -261,7 +261,7 @@ class OCASchemaDRIDataTuple(OCASchema):
 
 class Consent(OCASchemaDRIDataTuple):
     label = fields.String(required=True)
-    consent_uuid = fields.String(allow_none=True)
+    dri = fields.String()
 
 
 class ArrayOfConsents(Consent):
@@ -317,7 +317,7 @@ class Documentxcontext(PrimitiveValueSchema):
 
 
 class BaseService(OpenAPISchema):
-    consent_uuid = fields.String(required=True)
+    consent_dri = fields.String(required=True)
     service_schema_dri = fields.String(required=True)
     label = fields.String(required=True)
 
@@ -472,14 +472,14 @@ class ConsentsInput:
 
 
 
-class ConsentsConsentUuidInput:
+class ConsentsConsentDriInput:
     class Delete:
         """
         Removes consent by its uuid
         """
 
         class Path(OpenAPISchema):
-            consent_uuid = fields.Field(required=True)
+            consent_dri = fields.Field(required=True)
 
 
 
@@ -499,12 +499,10 @@ class ConnectionsConnectionUuidServicesInput:
 class ServicesInput:
     class Get:
         """
-        Retrieve all defined services
+        Retrieve service by id
         """
 
-        class Query(OpenAPISchema):
-            connection_id = fields.Field(description="\\'mine\\' to show my services")
-
+        pass
 
 
 
