@@ -23,6 +23,7 @@ from aries_cloudagent.pdstorage_thcf.api import (
     pds_load,
     pds_oca_data_format_save,
     pds_save_a,
+    pds_get_usage_policy_if_active_pds_supports_it,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
@@ -79,7 +80,10 @@ async def request_presentation_api(request: web.BaseRequest):
     if issuer_did is not None:
         presentation_request["issuer_did"] = issuer_did
 
-    message = RequestProof(presentation_request=presentation_request)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
+    message = RequestProof(
+        presentation_request=presentation_request, usage_policy=usage_policy
+    )
     await outbound_handler(message, connection_id=connection_id)
 
     exchange_record = THCFPresentationExchange(
@@ -261,18 +265,40 @@ async def debug_endpoint(request: web.BaseRequest):
     return web.json_response({"success": True, "result": ids, "multiple": multiple})
 
 
+from aiohttp import ClientSession, FormData, ClientTimeout
+
+
+async def verify_usage_policy(controller_usage_policy, subject_usage_policy):
+    timeout = ClientTimeout(total=15)
+    async with ClientSession(timeout=timeout) as session:
+        result = await session.post(
+            "https://governance.ownyourdata.eu/api/usage-policy/match",
+            json={
+                "data-subject": subject_usage_policy,
+                "data-controller": controller_usage_policy,
+            },
+        )
+        result = await result.text()
+        return result
+
+
 @docs(tags=["present-proof"], summary="retrieve exchange record")
 @querystring_schema(RetrieveExchangeQuerySchema())
 async def retrieve_credential_exchange_api(request: web.BaseRequest):
     context = request.app["request_context"]
 
     records = await THCFPresentationExchange.query(context, tag_filter=request.query)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
 
     result = []
     for i in records:
         serialize = i.serialize()
         if i.presentation_dri is not None:
             serialize["presentation"] = await i.presentation_pds_get(context)
+        if usage_policy and i.requester_usage_policy:
+            serialize["usage_policies_match"] = await verify_usage_policy(
+                i.requester_usage_policy, usage_policy
+            )
         result.append(serialize)
 
     """

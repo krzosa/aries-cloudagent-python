@@ -19,11 +19,13 @@ class RequestProof(AgentMessage):
         _id: str = None,
         *,
         presentation_request: dict = None,
+        usage_policy=None,
         **kwargs,
     ):
         """Initialize credential issue object."""
         super().__init__(_id=_id, **kwargs)
         self.presentation_request = presentation_request
+        self.usage_policy = usage_policy
 
 
 class RequestProofSchema(AgentMessageSchema):
@@ -39,3 +41,4 @@ class RequestProofSchema(AgentMessageSchema):
         required=False,
         description="presentation request (also known as proof request)",
     )
+    usage_policy = fields.Str(required=False)
