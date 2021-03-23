@@ -1,5 +1,6 @@
 """Admin routes for presentations."""
 
+from aries_cloudagent.aathcf.utils import run_repl_async
 import json
 
 from aiohttp import web
@@ -279,7 +280,11 @@ async def verify_usage_policy(controller_usage_policy, subject_usage_policy):
             },
         )
         result = await result.text()
-        return result
+        result = json.loads(result)
+
+        if result["code"] == 0:
+            return True, result["message"]
+        return False, result["message"]
 
 
 @docs(tags=["present-proof"], summary="retrieve exchange record")
@@ -296,7 +301,7 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
         if i.presentation_dri is not None:
             serialize["presentation"] = await i.presentation_pds_get(context)
         if usage_policy and i.requester_usage_policy:
-            serialize["usage_policies_match"] = await verify_usage_policy(
+            serialize["usage_policies_match"], _ = await verify_usage_policy(
                 i.requester_usage_policy, usage_policy
             )
         result.append(serialize)
@@ -310,7 +315,6 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
     except json.JSONDecodeError:
         LOGGER.warn(
             "Error parsing credentials, perhaps there are no credentials in store %s",
-            credentials,
         )
         credentials = {}
     except PDSError as err:
@@ -329,8 +333,6 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
                 cred_content = json.loads(cred["content"])
             except (json.JSONDecodeError, TypeError):
                 cred_content = cred["content"]
-
-            print("Cred content:", cred_content)
 
             record_base_dri = rec["presentation_request"].get(
                 "schema_base_dri", "INVALIDA"
@@ -384,3 +386,13 @@ def post_process_routes(app: web.Application):
             "externalDocs": {"description": "Specification"},
         }
     )
+
+
+async def test_usage_policy():
+    usage_pol_1 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
+    usage_pol_2 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
+    usage, _ = await verify_usage_policy(usage_pol_2, usage_pol_1)
+    print(usage)
+
+
+run_repl_async(__name__, test_usage_policy)

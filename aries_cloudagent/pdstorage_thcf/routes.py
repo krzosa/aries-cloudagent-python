@@ -330,9 +330,14 @@ async def get_multiple_records_for_oca_form_filling(request: web.BaseRequest):
     context = request.app["request_context"]
     dri_list = request.query
     dri_list = dri_list.getall("oca_schema_base_dris")
+    OCA_DATA_CHUNKS = "tda.oca_chunks"
 
+    result = {}
     try:
-        result = await load_multiple(context, oca_schema_base_dri=dri_list)
+        for dri in dri_list:
+            result[dri] = await load_multiple(
+                context, table=OCA_DATA_CHUNKS + "." + dri
+            )
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 

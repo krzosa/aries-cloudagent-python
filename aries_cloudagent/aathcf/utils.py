@@ -1,6 +1,15 @@
 from aries_cloudagent.messaging.base_handler import HandlerException
 
 
+def run_repl_async(name, func):
+    if name == "__main__":
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(func())
+        loop.close()
+
+
 def debug_handler(log, context, MessageClass):
     """
     Checks if MessageClass is of correct type, checks if connection is intact
