@@ -19,6 +19,8 @@ from .messages.present_proof import PresentProof
 from .models.utils import retrieve_exchange
 import logging
 from aries_cloudagent.pdstorage_thcf.api import (
+    oyd_verify_usage_policy,
+    pds_get_usage_policy_if_active_pds_supports_it,
     pds_query_by_oca_schema_dri,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
@@ -76,7 +78,10 @@ async def request_presentation_api(request: web.BaseRequest):
     if issuer_did is not None:
         presentation_request["issuer_did"] = issuer_did
 
-    message = RequestProof(presentation_request=presentation_request)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
+    message = RequestProof(
+        presentation_request=presentation_request, usage_policy=usage_policy
+    )
     await outbound_handler(message, connection_id=connection_id)
 
     exchange_record = THCFPresentationExchange(
@@ -221,24 +226,23 @@ async def acknowledge_proof(request: web.BaseRequest):
     )
 
 
-class DebugEndpointSchema(OpenAPISchema):
-    # {DRI1: [{timestamp: 23423453453534, data: {...}},{}], DRI2: [{},{}], DRI3: [{},{}] }
-    #     {d: {456...}, t: Date.current.getMilliseconds()} } d - data; t - timestamp
-    oca_data = fields.List(fields.Str())
-
-
 @docs(tags=["present-proof"], summary="retrieve exchange record")
 @querystring_schema(RetrieveExchangeQuerySchema())
 async def retrieve_credential_exchange_api(request: web.BaseRequest):
     context = request.app["request_context"]
 
     records = await THCFPresentationExchange.query(context, tag_filter=request.query)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
 
     result = []
     for i in records:
         serialize = i.serialize()
         if i.presentation_dri is not None:
             serialize["presentation"] = await i.presentation_pds_get(context)
+        if usage_policy and i.requester_usage_policy:
+            serialize["usage_policies_match"] = await oyd_verify_usage_policy(
+                i.requester_usage_policy, usage_policy
+            )
         result.append(serialize)
 
     """

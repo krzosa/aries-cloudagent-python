@@ -1,7 +1,6 @@
 from .....messaging.base_handler import (
     BaseHandler,
     BaseResponder,
-    HandlerException,
     RequestContext,
 )
 from ..messages.request_proof import RequestProof
@@ -11,7 +10,6 @@ from aries_cloudagent.protocols.present_proof.v1_1.models.presentation_exchange 
 )
 
 
-# TODO Error handling
 class RequestProofHandler(BaseHandler):
     """
     Message handler logic for incoming credential requests.
@@ -27,6 +25,7 @@ class RequestProofHandler(BaseHandler):
             role=THCFPresentationExchange.ROLE_PROVER,
             state=THCFPresentationExchange.STATE_REQUEST_RECEIVED,
             presentation_request=message.presentation_request,
+            requester_usage_policy=context.message.usage_policy,
         )
         record_id = await exchange_record.save(context)
         self._logger.info("credential_exchange_record_id = %s", record_id)
