@@ -1,3 +1,4 @@
+from aries_cloudagent.aathcf.utils import run_standalone_async
 from .base import BasePDS
 from .api import encode
 from .error import PDSError, PDSRecordNotFoundError
@@ -14,14 +15,38 @@ from collections import OrderedDict
 LOGGER = logging.getLogger(__name__)
 
 
+def map_parsed_usage_policy(usage_policy, map_against):
+    new_base = {}
+    missing = {}
+    for key, value in usage_policy.items():
+        list_of_attrs = []
+        possibilities = map_against["attr_entries"].get(key)
+        if possibilities is None:
+            missing[key] = "missing"
+        else:
+            for i in value:
+                found = False
+                for p in range(len(possibilities)):
+                    if possibilities[p] == i["value"]:
+                        found = True
+                        list_of_attrs.append(str(p))
+                if found == False:
+                    if missing.get(key) == None:
+                        missing[key] = {}
+                    missing[key][i["value"]] = "missing"
+            if list_of_attrs != []:
+                new_base[key] = list_of_attrs
+    return new_base, missing
+
+
 async def unpack_response(response):
     result: str = await response.text()
     if response.status == 404:
-        LOGGER.error("Error Own Your Data PDS", result)
+        LOGGER.error("Error Own Your Data PDS %s", result)
         raise PDSRecordNotFoundError("Record not found in Own your data PDS", result)
 
     elif response.status != 200:
-        LOGGER.error("Error Own Your Data PDS", result)
+        LOGGER.error("Error Own Your Data PDS %s", result)
         raise PDSError("Error Own Your Data PDS", result)
 
     return result
@@ -101,6 +126,27 @@ class OwnYourDataVault(BasePDS):
             self.settings["usage_policy"] = result
             LOGGER.debug("Usage policy %s", self.settings["usage_policy"])
 
+        """
+        Upload usage_policy as oca_schema_chunk
+        """
+
+        async with ClientSession() as session:
+            result = await session.post(
+                "https://governance.ownyourdata.eu/api/usage-policy/parse",
+                headers={"Authorization": "Bearer " + self.token["access_token"]},
+                json={"ttl": self.settings["usage_policy"]},
+            )
+            result = await unpack_response(result)
+            result = json.loads(result)
+            print(result)
+            result, err = map_parsed_usage_policy(result, cached_schema_to_map_against)
+            await self.save(
+                result,
+                {"table": "tda.oca_chunks.H5F2YgEbXpSZjcNqAYevfGPFXSWUV1d2PnVg2ubkkKb"},
+                addition_meta={"missing": err},
+            )
+            print(result, err)
+
     async def update_token_when_expired(self):
         time_elapsed = time.time() - (self.token_timestamp - 10)
         if time_elapsed > float(self.token["expires_in"]):
@@ -123,7 +169,7 @@ class OwnYourDataVault(BasePDS):
 
         return result_dict
 
-    async def save(self, record, metadata: dict) -> str:
+    async def save(self, record, metadata: dict, *, addition_meta) -> str:
         """
         meta: {
             "table" - specifies the table name into which save the data
@@ -165,10 +211,8 @@ class OwnYourDataVault(BasePDS):
                 "table_name": table,
                 "mime_type": "application/json",
             }
-
-            if meta.get("oca_schema_dri") is not None:
-                record["oca_schema_dri"] = meta["oca_schema_dri"]
-                body["schema_dri"] = meta["oca_schema_dri"]
+            if addition_meta:
+                body.update(addition_meta)
 
             """
             Request
@@ -226,3 +270,244 @@ class OwnYourDataVault(BasePDS):
             return [False, str(err)]
 
         return [True, None]
+
+
+def test_format():
+    base = {
+        "sick": [{"ns": "...", "value": "No"}],
+        "allergies": [{"ns": "...", "value": "Yes"}],
+        "seriousReaction": [
+            {"ns": "...", "value": "Yes"},
+            {"ns": "...", "value": "Don't Know"},
+        ],
+        "test_not_existent": [{"ns": "...", "value": "Yes"}],
+        "test_not_existent_value": [{"ns": "...", "value": "CoolValue"}],
+    }
+    schema = {
+        "@context": "https://odca.tech/overlays/v1",
+        "type": "spec/overlay/entry/1.0",
+        "issued_by": "",
+        "role": "",
+        "purpose": "",
+        "schema_base": "hl:afW1EfhWNh76BL3FUV8mniQAU4jRAb6Q6vxuCpLy5Nf6",
+        "language": "en_US",
+        "attr_entries": {
+            "sick": ["Yes", "No", "Don't Know"],
+            "allergies": ["Yes", "No", "Don't Know"],
+            "seriousReaction": ["Yes", "No", "Don't Know"],
+            "healthProblem": ["Yes", "No", "Don't Know"],
+            "immuneSystemProblem": ["Yes", "No", "Don't Know"],
+            "radiationTreatments": ["Yes", "No", "Don't Know"],
+            "nervousSystemProblem": ["Yes", "No", "Don't Know"],
+            "bloodProducts": ["Yes", "No", "Don't Know"],
+            "pregnant": ["Yes", "No", "Don't Know"],
+            "recentVaccinations": ["Yes", "No", "Don't Know"],
+            "additionalDataRequest": ["Yes", "No"],
+            "immunizationRecordCard": ["Yes", "No"],
+            "test_not_existent_value": ["Yes", "No"],
+        },
+    }
+
+    result, err = map_parsed_usage_policy(base, schema)
+    assert err["test_not_existent"] == "missing"
+    assert err["test_not_existent_value"]["CoolValue"] == "missing"
+    assert result == {
+        "sick": ["1"],
+        "allergies": ["0"],
+        "seriousReaction": ["0", "2"],
+    }
+
+
+cached_schema_to_map_against = {
+    "@context": "https://odca.tech/overlays/v1",
+    "type": "spec/overlay/entry/1.0",
+    "issued_by": "",
+    "role": "",
+    "purpose": "",
+    "schema_base": "hl:8gkUPenRUXU15qrUZufoeLriqxqNMAtmUqRJCC8ajULr",
+    "language": "en_US",
+    "attr_entries": {
+        "data": [
+            "AnyData",
+            "Activity",
+            "Anonymized",
+            "AudiovisualActivity",
+            "Computer",
+            "Content",
+            "Demographic",
+            "Derived",
+            "EarthObservation",
+            "Meteorology",
+            "MeteorologicMeasurement",
+            "MeteorologicForecast",
+            "MeteorologicCurrent",
+            "MeteorologicHistoric",
+            "MeteorologicRaster",
+            "Geophysics",
+            "GeophysicsSeismology",
+            "GeophysicsMagneticField",
+            "GeophysicsGravimetry",
+            "Financial",
+            "Government",
+            "Health",
+            "Diabetes",
+            "Sensor",
+            "InsulinPump",
+            "Interactive",
+            "Judicial",
+            "Location",
+            "Navigation",
+            "Online",
+            "OnlineActivity",
+            "Physical",
+            "PhysicalActivity",
+            "Political",
+            "Preference",
+            "Profile",
+            "Purchase",
+            "Social",
+            "State",
+            "Statistical",
+            "TelecomActivity",
+            "UniqueId",
+        ],
+        "purpose": [
+            "AnyPurpose",
+            "Account",
+            "Admin",
+            "Arts",
+            "Browsing",
+            "Charity",
+            "Communicate",
+            "Current",
+            "Custom",
+            "Delivery",
+            "Develop",
+            "Downloads",
+            "Education",
+            "Feedback",
+            "Finmgt",
+            "Gambling",
+            "Gaming",
+            "Government",
+            "Health",
+            "Historical",
+            "Login",
+            "Marketing",
+            "MeteorologicalService",
+            "News",
+            "Payment",
+            "Sales",
+            "Search",
+            "State",
+            "Tailoring",
+            "Telemarketing",
+        ],
+        "processing": [
+            "AnyProcessing",
+            "Aggregate",
+            "Analyze",
+            "Anonymize",
+            "Collect",
+            "Copy",
+            "Derive",
+            "Move",
+            "Query",
+            "Transfer",
+        ],
+        "recipient": [
+            "AnyRecipient",
+            "Ours",
+            "Delivery",
+            "Same",
+            "OtherRecipient",
+            "Unrelated",
+            "Public",
+        ],
+        "location": [
+            "AnyLocation",
+            "OurServers",
+            "ThirdParty",
+            "EU",
+            "EULike",
+            "ThirdCountries",
+        ],
+        "duration": [
+            "AnyDuration",
+            "StatedPurpose",
+            "LegalRequirement",
+            "BusinessPractices",
+            "Indefinitely",
+        ],
+    },
+}
+
+
+def test_format_2():
+    schema = cached_schema_to_map_against
+    base = {
+        "duration": [
+            {
+                "ns": "http://www.specialprivacy.eu/vocabs/duration#",
+                "value": "LegalRequirement",
+            }
+        ],
+        "data": [
+            {"ns": "http://www.specialprivacy.eu/vocabs/data#", "value": "Profile"}
+        ],
+        "purpose": [
+            {"ns": "http://www.specialprivacy.eu/vocabs/purposes#", "value": "Health"}
+        ],
+        "recipient": [
+            {"ns": "http://www.specialprivacy.eu/vocabs/recipients#", "value": "Ours"}
+        ],
+        "processing": [
+            {
+                "ns": "http://www.specialprivacy.eu/vocabs/processing#",
+                "value": "Aggregate",
+            },
+            {
+                "ns": "http://www.specialprivacy.eu/vocabs/processing#",
+                "value": "Analyze",
+            },
+            {
+                "ns": "http://www.specialprivacy.eu/vocabs/processing#",
+                "value": "Collect",
+            },
+            {"ns": "http://www.specialprivacy.eu/vocabs/processing#", "value": "Copy"},
+            {"ns": "http://www.specialprivacy.eu/vocabs/processing#", "value": "Move"},
+            {"ns": "http://www.specialprivacy.eu/vocabs/processing#", "value": "Query"},
+            {
+                "ns": "http://www.specialprivacy.eu/vocabs/processing#",
+                "value": "Transfer",
+            },
+        ],
+        "location": [
+            {"ns": "http://www.specialprivacy.eu/vocabs/locations#", "value": "EU"}
+        ],
+    }
+    result, err = map_parsed_usage_policy(base, schema)
+
+    assert err == {}
+    assert result == {
+        "data": ["35"],
+        "purpose": ["18"],
+        "processing": ["1", "2", "4", "5", "7", "8", "9"],
+        "recipient": ["1"],
+        "location": ["3"],
+        "duration": ["2"],
+    }, result
+
+
+async def test_usage_policy_parse():
+    vault = OwnYourDataVault()
+
+    vault.settings["client_id"] = "-s2bdkM_cv7KYDF5xg_Lj6vil1ZJaLQJ79duOW7J9g4"
+    vault.settings["client_secret"] = "s_dR8dzbVES_vvc1-nyb1O_cuzyCz2_bRd3Lr12s4ug"
+    vault.settings["api_url"] = "https://data-vault.eu"
+    await vault.update_token()
+    # test_format()
+    # test_format_2()
+
+
+run_standalone_async(__name__, test_usage_policy_parse)

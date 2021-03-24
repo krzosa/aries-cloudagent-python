@@ -1,6 +1,6 @@
 """Admin routes for presentations."""
 
-from aries_cloudagent.aathcf.utils import run_repl_async
+from aries_cloudagent.aathcf.utils import run_standalone_async
 import json
 
 from aiohttp import web
@@ -395,4 +395,4 @@ async def test_usage_policy():
     print(usage)
 
 
-run_repl_async(__name__, test_usage_policy)
+run_standalone_async(__name__, test_usage_policy)

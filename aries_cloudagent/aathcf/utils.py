@@ -1,7 +1,7 @@
 from aries_cloudagent.messaging.base_handler import HandlerException
 
 
-def run_repl_async(name, func):
+def run_standalone_async(name, func):
     if name == "__main__":
         import asyncio
 
