@@ -169,7 +169,7 @@ class OwnYourDataVault(BasePDS):
 
         return result_dict
 
-    async def save(self, record, metadata: dict, *, addition_meta) -> str:
+    async def save(self, record, metadata: dict, *, addition_meta={}) -> str:
         """
         meta: {
             "table" - specifies the table name into which save the data
