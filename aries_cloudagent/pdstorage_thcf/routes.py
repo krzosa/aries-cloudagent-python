@@ -22,6 +22,7 @@ from .models.saved_personal_storage import SavedPDS
 from aries_cloudagent.pdstorage_thcf.api import pds_oca_data_format_save
 import aries_cloudagent.generated_models as model
 
+OCA_DATA_CHUNKS = "tda.oca_chunks"
 
 class SaveRecordSchema(Schema):
     payload = fields.Str(required=True)
