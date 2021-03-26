@@ -1,9 +1,9 @@
-from .base import BasePersonalDataStorage
-from .error import PDSNotFoundError
+from .base import BasePDS
 from .api import encode
+import json
 
 
-class LocalPersonalDataStorage(BasePersonalDataStorage):
+class LocalPDS(BasePDS):
     def __init__(self):
         super().__init__()
         self.storage = {}
@@ -23,10 +23,17 @@ class LocalPersonalDataStorage(BasePersonalDataStorage):
         return {"content": result}
 
     async def save(self, record, metadata: dict) -> str:
-        result = encode(record)
-        self.storage[result] = record
+        dri_value = None
+        if isinstance(record, str):
+            dri_value = encode(record)
+        elif isinstance(record, dict):
+            dri_value = encode(json.dumps(record))
+        else:
+            raise AssertionError("Invalid type")
 
-        return result
+        self.storage[dri_value] = record
+
+        return dri_value
 
     async def load_multiple(
         self, *, table: str = None, oca_schema_base_dri: str = None

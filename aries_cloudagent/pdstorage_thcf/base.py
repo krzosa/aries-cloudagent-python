@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class BasePersonalDataStorage(ABC):
+class BasePDS(ABC):
     def __init__(self):
         self.settings = {}
         self.preview_settings = {}

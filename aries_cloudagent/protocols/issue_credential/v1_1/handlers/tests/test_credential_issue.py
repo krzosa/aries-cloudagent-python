@@ -1,12 +1,9 @@
-import pytest
 from asynctest import (
-    mock as async_mock,
     TestCase as AsyncTestCase,
 )
 
 from aries_cloudagent.messaging.request_context import RequestContext
 from aries_cloudagent.messaging.responder import MockResponder
-from aries_cloudagent.transport.inbound.receipt import MessageReceipt
 from aries_cloudagent.protocols.issue_credential.v1_1.messages.credential_issue import (
     CredentialIssue,
 )
@@ -20,8 +17,6 @@ from aries_cloudagent.protocols.issue_credential.v1_1.models.credential_exchange
 )
 from aries_cloudagent.issuer.pds import PDSIssuer
 from aries_cloudagent.wallet.basic import BasicWallet
-from ...utils import create_credential
-from aries_cloudagent.connections.models.connection_record import ConnectionRecord
 from aries_cloudagent.issuer.base import BaseIssuer
 from aries_cloudagent.holder.base import BaseHolder
 from aries_cloudagent.holder.pds import PDSHolder

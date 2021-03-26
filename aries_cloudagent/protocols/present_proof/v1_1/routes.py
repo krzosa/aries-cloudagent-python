@@ -1,20 +1,19 @@
 """Admin routes for presentations."""
 
+from aries_cloudagent.aathcf.utils import run_standalone_async
 import json
 
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
-    match_info_schema,
     querystring_schema,
     request_schema,
-    response_schema,
 )
 from marshmallow import fields
 from ....connections.models.connection_record import ConnectionRecord
 from ....holder.base import BaseHolder, HolderError
 from .models.presentation_exchange import THCFPresentationExchange
-from ....messaging.models.openapi import OpenAPISchema, Schema
+from ....messaging.models.openapi import OpenAPISchema
 from aries_cloudagent.protocols.issue_credential.v1_1.utils import retrieve_connection
 from .messages.request_proof import RequestProof
 from .messages.present_proof import PresentProof
@@ -24,21 +23,16 @@ from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
     pds_load,
     pds_oca_data_format_save,
-    pds_save,
     pds_save_a,
+    pds_get_usage_policy_if_active_pds_supports_it,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
-from aries_cloudagent.protocols.issue_credential.v1_1.utils import (
-    create_credential,
-    create_credential_a,
-)
 from aries_cloudagent.protocols.issue_credential.v1_1.routes import (
     routes_get_public_did,
 )
-
+from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
 from .messages.acknowledge_proof import AcknowledgeProof
-from collections import OrderedDict
 
 LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +81,10 @@ async def request_presentation_api(request: web.BaseRequest):
     if issuer_did is not None:
         presentation_request["issuer_did"] = issuer_did
 
-    message = RequestProof(presentation_request=presentation_request)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
+    message = RequestProof(
+        presentation_request=presentation_request, usage_policy=usage_policy
+    )
     await outbound_handler(message, connection_id=connection_id)
 
     exchange_record = THCFPresentationExchange(
@@ -196,20 +193,24 @@ async def acknowledge_proof(request: web.BaseRequest):
         context, exchange.connection_id
     )
 
-    credential = await create_credential_a(
-        context,
-        credential_type="ProofAcknowledgment",
-        credential_values={
-            "oca_data": {
-                "verified": str(query.get("status")),
-                "presentation_dri": exchange.presentation_dri,
-                "issuer_name": context.settings.get("default_label"),
+    try:
+        issuer: BaseIssuer = await context.inject(BaseIssuer)
+        credential = await issuer.create_credential_ex(
+            credential_values={
+                "oca_data": {
+                    "verified": str(query.get("status")),
+                    "presentation_dri": exchange.presentation_dri,
+                    "issuer_name": context.settings.get("default_label"),
+                },
+                "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
             },
-            "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
-        },
-        their_public_did=exchange.prover_public_did,
-        exception=web.HTTPInternalServerError,
-    )
+            credential_type="ProofAcknowledgment",
+            subject_public_did=exchange.prover_public_did,
+        )
+    except IssuerError as err:
+        raise web.HTTPInternalServerError(
+            reason=f"Error occured while creating a credential {err.roll_up}"
+        )
 
     message = AcknowledgeProof(credential=credential)
     message.assign_thread_id(exchange.thread_id)
@@ -265,18 +266,44 @@ async def debug_endpoint(request: web.BaseRequest):
     return web.json_response({"success": True, "result": ids, "multiple": multiple})
 
 
+from aiohttp import ClientSession, FormData, ClientTimeout
+
+
+async def verify_usage_policy(controller_usage_policy, subject_usage_policy):
+    timeout = ClientTimeout(total=15)
+    async with ClientSession(timeout=timeout) as session:
+        result = await session.post(
+            "https://governance.ownyourdata.eu/api/usage-policy/match",
+            json={
+                "data-subject": subject_usage_policy,
+                "data-controller": controller_usage_policy,
+            },
+        )
+        result = await result.text()
+        result = json.loads(result)
+
+        if result["code"] == 0:
+            return True, result["message"]
+        return False, result["message"]
+
+
 @docs(tags=["present-proof"], summary="retrieve exchange record")
 @querystring_schema(RetrieveExchangeQuerySchema())
 async def retrieve_credential_exchange_api(request: web.BaseRequest):
     context = request.app["request_context"]
 
     records = await THCFPresentationExchange.query(context, tag_filter=request.query)
+    usage_policy = await pds_get_usage_policy_if_active_pds_supports_it(context)
 
     result = []
     for i in records:
         serialize = i.serialize()
         if i.presentation_dri is not None:
             serialize["presentation"] = await i.presentation_pds_get(context)
+        if usage_policy and i.requester_usage_policy:
+            serialize["usage_policies_match"], _ = await verify_usage_policy(
+                i.requester_usage_policy, usage_policy
+            )
         result.append(serialize)
 
     """
@@ -288,7 +315,6 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
     except json.JSONDecodeError:
         LOGGER.warn(
             "Error parsing credentials, perhaps there are no credentials in store %s",
-            credentials,
         )
         credentials = {}
     except PDSError as err:
@@ -307,8 +333,6 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
                 cred_content = json.loads(cred["content"])
             except (json.JSONDecodeError, TypeError):
                 cred_content = cred["content"]
-
-            print("Cred content:", cred_content)
 
             record_base_dri = rec["presentation_request"].get(
                 "schema_base_dri", "INVALIDA"
@@ -362,3 +386,13 @@ def post_process_routes(app: web.Application):
             "externalDocs": {"description": "Specification"},
         }
     )
+
+
+async def test_usage_policy():
+    usage_pol_1 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
+    usage_pol_2 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
+    usage, _ = await verify_usage_policy(usage_pol_2, usage_pol_1)
+    print(usage)
+
+
+run_standalone_async(__name__, test_usage_policy)

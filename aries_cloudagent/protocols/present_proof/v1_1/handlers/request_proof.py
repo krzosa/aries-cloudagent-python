@@ -27,6 +27,7 @@ class RequestProofHandler(BaseHandler):
             role=THCFPresentationExchange.ROLE_PROVER,
             state=THCFPresentationExchange.STATE_REQUEST_RECEIVED,
             presentation_request=message.presentation_request,
+            requester_usage_policy=message.usage_policy,
         )
         record_id = await exchange_record.save(context)
         self._logger.info("credential_exchange_record_id = %s", record_id)

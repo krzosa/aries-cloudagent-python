@@ -1,26 +1,19 @@
 import json
 import logging
-import nacl
 from typing import Sequence, Tuple
 
-from ..wallet.crypto import sign_message, verify_signed_message
-from ..wallet.base import BaseWallet, KeyInfo
-from ..connections.models.connection_record import ConnectionRecord
+from ..wallet.base import BaseWallet, DIDInfo
 
 from .base import (
     BaseIssuer,
     IssuerError,
-    IssuerRevocationRegistryFullError,
     DEFAULT_CRED_DEF_TAG,
     DEFAULT_SIGNATURE_TYPE,
 )
-from aries_cloudagent.wallet.util import bytes_to_b64
 from ..messaging.util import time_now
-from aries_cloudagent.wallet.error import WalletError
 from ..aathcf.credentials import create_proof
 from aries_cloudagent.aathcf.credentials import (
     CredentialSchema,
-    assert_type,
     validate_schema,
 )
 from collections import OrderedDict
@@ -71,7 +64,6 @@ class PDSIssuer(BaseIssuer):
 
         """
 
-        pass
         return (schema_id, schema_json)
 
     def make_credential_definition_id(
@@ -91,7 +83,6 @@ class PDSIssuer(BaseIssuer):
         Args:
             credential_definition_id: The credential definition ID to check
         """
-        pass
         return False
 
     async def create_and_store_credential_definition(
@@ -117,7 +108,6 @@ class PDSIssuer(BaseIssuer):
 
         """
 
-        pass
         return (credential_definition_id, credential_definition_json)
 
     async def create_credential_offer(self, credential_definition_id: str) -> str:
@@ -131,7 +121,6 @@ class PDSIssuer(BaseIssuer):
             The created credential offer
 
         """
-        pass
 
         return credential_offer_json
 
@@ -144,33 +133,28 @@ class PDSIssuer(BaseIssuer):
         revoc_reg_id: str = None,
         tails_file_path: str = None,
     ) -> Tuple[str, str]:
-        """
-        Create a credential.
+        credential = await self.create_credential_ex(credential_values, schema.get("credential_type"))
+        return [credential, None]
 
-        Args
-            schema: Schema to create credential for
-            credential_offer: Credential Offer to create credential for
-            credential_request: Credential request to create credential for
-            credential_values: Values to go in credential
-            revoc_reg_id: ID of the revocation registry
-            tails_file_path: Path to the local tails file
-
-        Returns:
-            A tuple of created credential and revocation id
-
-        """
-        credential_type = schema.get("credential_type")
-
+    async def create_credential_ex(
+        self,
+        credential_values,
+        credential_type: str or list = None,
+        subject_public_did: str = None,
+    ) -> str:
         my_did = await self.wallet.get_public_did()
-        raise_exception_on_null(my_did, "my Public did is NULL!")
-        raise_exception_on_null(my_did[0], "my Public did is NULL!")
-        raise_exception_on_null(schema, "input schema")
-        raise_exception_on_null(credential_values, "input credential_values")
+        if not isinstance(my_did, DIDInfo) or my_did[0] is None:
+            raise IssuerError("Public did is not registered!")
+        if not isinstance(credential_values, dict) or credential_values == {}:
+            raise IssuerError("credential_values is Null")
 
         my_did = my_did[0]
-
         credential_dict = OrderedDict()
-        # TODO: Point to some OCA Credential schema
+
+        if isinstance(subject_public_did, str):
+            credential_values.update({"subject_id": subject_public_did})
+        else:
+            self.logger.warn("Invalid type of their public did")
 
         # This documents should exist, those should be cached
         # it seems to be establishing a semantic context, meaning
@@ -183,6 +167,7 @@ class PDSIssuer(BaseIssuer):
         credential_dict["context"] = [
             "https://www.w3.org/2018/credentials/v1",
             "https://www.schema.org",
+            # TODO: Point to some OCA Credential schema
         ]
 
         # This partly seems to be an extension of context
@@ -190,9 +175,9 @@ class PDSIssuer(BaseIssuer):
         # and that json has VerifiableCredential with all possible fields
         # which we can reach through https://www.schema.org/VerifiableCredential
         credential_dict["type"] = ["VerifiableCredential"]
-        if isinstance(credential_type, str) and credential_type != "":
+        if isinstance(credential_type, str):
             credential_dict["type"].append(credential_type)
-        elif isinstance(credential_type, list) and credential_type != []:
+        elif isinstance(credential_type, list):
             credential_dict["type"].extend(credential_type)
 
         credential_dict["issuer"] = my_did
@@ -200,7 +185,7 @@ class PDSIssuer(BaseIssuer):
         credential_dict["credentialSubject"] = credential_values
         # "credentialSubject": {
         #     # This should point to some info about the subject of credenial?
-        #     # machine readable document, about the subjecty
+        #     # machine readable document, about the subject
         #     "id": "Did of subject",
         #     "ocaSchema": {
         #         "dri": "1234",
@@ -213,7 +198,7 @@ class PDSIssuer(BaseIssuer):
             CredentialSchema, credential_dict, IssuerError, self.logger.error
         )
 
-        return json.dumps(credential_dict), None
+        return json.dumps(credential_dict)
 
     async def revoke_credentials(
         self, revoc_reg_id: str, tails_file_path: str, cred_revoc_ids: Sequence[str]
@@ -230,7 +215,6 @@ class PDSIssuer(BaseIssuer):
             Tuple with the combined revocation delta, list of cred rev ids not revoked
 
         """
-        pass
 
     async def merge_revocation_registry_deltas(
         self, fro_delta: str, to_delta: str
@@ -246,8 +230,6 @@ class PDSIssuer(BaseIssuer):
             Merged delta in JSON format
 
         """
-
-        pass
 
     async def create_and_store_revocation_registry(
         self,
@@ -273,5 +255,3 @@ class PDSIssuer(BaseIssuer):
             A tuple of the revocation registry ID, JSON, and entry JSON
 
         """
-
-        pass

@@ -208,22 +208,6 @@ To start debugging hit Ctrl + Shift + P (The command menu) type in start debuggi
 * Proof presentation step might not work properly if all the schema fields are not filled so that it doesnt have the None value(can be filled even with meaningless info)
 * Errors seem to be propagated to the next stage of the protocol, even though first stage passed the next stage can throw a invalid structure error
 
-### Code Keywords to look for what changed (case insensitive)
-
-* Original
-* Krzosa
-* THCF
-
-
-
-
-
-
-
-
-
-
-
 
 # Hyperledger Aries Cloud Agent - Python  <!-- omit in toc -->
 

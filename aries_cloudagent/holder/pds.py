@@ -113,7 +113,7 @@ class PDSHolder(BaseHolder):
         credential_id = requested_credentials.get("credential_id")
 
         if credential_id is None:
-            raise HolderError("Provided credentials are empty " + requested_credentials)
+            raise HolderError(f"Provided credentials are empty {requested_credentials}")
 
         """
 

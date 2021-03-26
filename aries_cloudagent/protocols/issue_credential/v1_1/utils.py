@@ -5,7 +5,7 @@ from aries_cloudagent.protocols.issue_credential.v1_1.models.credential_exchange
     CredentialExchangeRecord,
 )
 from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
-from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
+from aries_cloudagent.aathcf.credentials import assert_type
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -54,71 +54,3 @@ async def retrieve_credential_exchange(context, credential_exchange_id):
 
     return exchange_record
 
-
-# TODO: Not connection record
-async def create_credential(
-    context,
-    credential_request,
-    *,
-    their_public_did: str = None,
-    exception=web.HTTPInternalServerError,
-) -> dict:
-    """
-    Create Credential utility wrapper which handles exceptions
-
-    optionally you can pass
-
-    Args:
-        credential_request - dictionary containing "credential_values" and
-        "credential_type", credential_type is optional, it's added to types
-        exception - pass in exception if you are using this outside of routes
-    """
-    credential_type = credential_request.get("credential_type")
-    credential_values = credential_request.get("credential_values")
-
-    if their_public_did is not None:
-        assert_type(their_public_did, str)
-        credential_values.update({"subject_id": their_public_did})
-
-    try:
-        issuer: BaseIssuer = await context.inject(BaseIssuer)
-        credential, _ = await issuer.create_credential(
-            schema={
-                "credential_type": credential_type,
-            },
-            credential_values=credential_values,
-            credential_offer={},
-            credential_request={},
-        )
-    except IssuerError as err:
-        raise exception(reason=f"""create_credential: {err.roll_up}""")
-
-    return credential
-
-
-async def create_credential_a(
-    context,
-    credential_type,
-    credential_values,
-    *,
-    their_public_did: str = None,
-    exception=web.HTTPInternalServerError,
-) -> dict:
-
-    if isinstance(their_public_did, str):
-        credential_values.update({"subject_id": their_public_did})
-    else:
-        LOGGER.warn("Invalid type of their public did")
-
-    try:
-        issuer: BaseIssuer = await context.inject(BaseIssuer)
-        credential, _ = await issuer.create_credential(
-            schema={"credential_type": credential_type},
-            credential_values=credential_values,
-            credential_offer={},
-            credential_request={},
-        )
-    except IssuerError as err:
-        raise exception(reason=f"create_credential: {err.roll_up}")
-
-    return credential

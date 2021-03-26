@@ -55,6 +55,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
         acknowledgment_credential_dri: str = None,
         verified: str = None,
         auto_present: bool = False,
+        requester_usage_policy=None,
         error_msg: str = None,
         trace: bool = False,
         **kwargs,
@@ -75,6 +76,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
         self.error_msg = error_msg
         self.trace = trace
         self.acknowledgment_credential_dri = None
+        self.requester_usage_policy = requester_usage_policy
 
     @property
     def presentation_exchange_id(self) -> str:
@@ -93,6 +95,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
                 "presentation_proposal",
                 "presentation_request",
                 "acknowledgment_credential_dri",
+                "requester_usage_policy",
                 "prover_public_did",
                 "presentation_dri",
                 "role",

@@ -7,6 +7,7 @@ from asynctest import mock as async_mock
 from ...wallet.basic import BasicWallet
 from ..pds import *
 from ...aathcf.credentials import verify_proof
+from aries_cloudagent.connections.models.connection_record import ConnectionRecord
 
 
 credential_test_schema = OrderedDict(
@@ -62,14 +63,13 @@ async def create_test_credential(issuer):
         },
     }
 
-    connection = ConnectionRecord(my_did="1234-my", their_did="1234-their")
     credential, _ = await issuer.create_credential(
         schema={"credential_type": "TestType"},
         credential_values=test_cred["credentialSubject"],
         credential_offer={},
-        credential_request={"connection_record": connection},
+        credential_request={},
     )
-    credential_dict = json.loads(credential)
+    credential_dict = json.loads(credential, object_pairs_hook=OrderedDict)
 
     assert credential_dict.get("proof") != None
     assert credential_dict["credentialSubject"] == test_cred["credentialSubject"]
@@ -107,4 +107,40 @@ class TestPDSIssuer(AsyncTestCase):
                 credential_values={},
                 credential_offer={},
                 credential_request={"connection_record": connection},
+            )
+
+    async def test_credentials_are_equal(self):
+        test_cred = {
+            "credentialSubject": {
+                "id": "TODO: Did of subject",
+                "ocaSchema": {
+                    "dri": "1234",
+                    "dataDri": "1234",
+                },
+                "first_name": "Karol",
+            },
+        }
+        credential_ex = await self.issuer.create_credential_ex(
+            test_cred["credentialSubject"], "TestType"
+        )
+        credential_ex = json.loads(credential_ex)
+        credential = await create_test_credential(self.issuer)
+
+        assert credential["credentialSubject"] == credential_ex["credentialSubject"]
+        assert credential.keys() == credential_ex.keys()
+
+
+class TestPDSIssuerNoActiveDid(AsyncTestCase):
+    async def test_create_credential_active_did_is_none(self):
+        self.wallet = BasicWallet()
+        self.issuer: PDSIssuer = PDSIssuer(self.wallet)
+        assert self.issuer.wallet is self.wallet
+        with self.assertRaises(IssuerError):
+            await self.issuer.create_credential_ex({})
+        with self.assertRaises(IssuerError):
+            credential, _ = await self.issuer.create_credential(
+                schema={"credential_type": "TestType"},
+                credential_values={},
+                credential_offer={},
+                credential_request={},
             )
