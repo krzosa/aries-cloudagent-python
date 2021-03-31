@@ -27,7 +27,6 @@ async def start_app(conductor: Conductor):
     """Start up."""
     await conductor.setup()
     await conductor.start()
-    print("Startup Time:", time.time() - global_app_start_time)
 
 
 async def shutdown_app(conductor: Conductor):
@@ -45,8 +44,6 @@ def init_argument_parser(parser: ArgumentParser):
 
 def execute(argv: Sequence[str] = None):
     """Entrypoint."""
-    global global_app_start_time
-    global_app_start_time = time.time()
     parser = ArgumentParser()
     parser.prog += " start"
     get_settings = init_argument_parser(parser)

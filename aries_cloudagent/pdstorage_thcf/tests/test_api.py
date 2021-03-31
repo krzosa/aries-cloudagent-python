@@ -1,15 +1,10 @@
+from aries_cloudagent.pdstorage_thcf.api import OCARecord
 from asynctest import TestCase as AsyncTestCase
 import aries_cloudagent.pdstorage_thcf.api as api
 from aries_cloudagent.messaging.models.base_record import BaseRecord
 
 pds_load = api.pds_load
 pds_save = api.pds_save
-
-
-class _TestModel:
-    def __init__(self, field1, field2):
-        self.field1 = field1
-        self.field2 = field2
 
 
 class _TestBaseRecord(BaseRecord):
@@ -50,69 +45,23 @@ class TestPDSApi(AsyncTestCase):
         }
         self.acapy_record = _TestBaseRecord(**self.acapy_record_dict)
 
-    async def test_pds_save_model(self):
-        data = {"field1": "str1", "field2": "str2"}
-        model = _TestModel(**data)
+    async def test_pds_record(self):
+        class Inherit(OCARecord):
+            def __init__(self, test, *, oca_schema_dri=None, dri=None):
+                self.test = test
+                super().__init__(oca_schema_dri, dri)
 
-        async def pds_save_stub(context, payload, dri):
-            assert payload == model.__dict__
-            assert payload == data
-            return "12345"
-
-        api.pds_save = pds_save_stub
-
-        result = await api.pds_save_model(None, model)
-        assert result == "12345"
-
-        await self.assertAsyncRaises(
-            AssertionError, api.pds_save_model(None, {"invalid": "data"})
-        )
-
-    async def test_pds_load_model(self):
-        data = {"field1": "str1", "field2": "str2"}
-        self_id = "1234"
-
-        async def pds_load_stub(context, id):
-            assert self_id == id
-            return data
-
-        api.pds_load = pds_load_stub
-        result = await api.pds_load_model(None, self_id, _TestModel)
-        assert result.__dict__ == data
-
-        async def pds_load_stub_invalid(context, id):
-            return {"invalid": "data"}
-
-        api.pds_load = pds_load_stub_invalid
-        awaitable = api.pds_load_model(None, self_id, _TestModel)
-        await self.assertAsyncRaises(TypeError, awaitable)
-
-        async def pds_load_stub_invalid(context, id):
-            return {"field1": "data"}
-
-        api.pds_load = pds_load_stub_invalid
-        awaitable = api.pds_load_model(None, self_id, _TestModel)
-        await self.assertAsyncRaises(TypeError, awaitable)
-
-    async def test_pds_load_acapy_record(self):
-        async def pds_load_stub(context, id):
-            return self.acapy_record_dict
-
-        api.pds_load = pds_load_stub
-        result = await api.pds_load_model(None, "1234", _TestBaseRecord)
-        assert result == self.acapy_record
-
-    async def test_pds_save_acapy_record(self):
-        async def pds_save_stub(context, payload, dri):
-            assert payload == self.acapy_record.value
-            return "12345"
-
-        api.pds_save = pds_save_stub
-        result = await api.pds_save_model(None, self.acapy_record)
-        assert result == "12345"
+        inherit = Inherit("asd", oca_schema_dri="123", dri="123")
+        assert inherit.serialize() == {
+            "test": "asd",
+            "dri": "123",
+            "oca_schema_dri": "123",
+        }
+        assert inherit.values() == {"test": "asd"}
+        inherit = Inherit("asd", oca_schema_dri="123")
+        assert inherit.serialize() == {"test": "asd", "oca_schema_dri": "123"}
 
     async def test_pds_load_recursive(self):
-
         payload_dri_1234 = {
             "consent_dri": "12345",
             "test_data": "abc",

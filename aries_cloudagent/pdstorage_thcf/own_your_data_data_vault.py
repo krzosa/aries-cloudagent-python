@@ -184,6 +184,9 @@ class OwnYourDataVault(BasePDS):
             "timestamp": int(round(time.time() * 1000)),  # current time in milliseconds
         }
 
+        if oca_schema_dri is not None:
+            record.update({"oca_schema_dri": oca_schema_dri})
+
         body = {
             "content": record,
             "dri": dri_value,

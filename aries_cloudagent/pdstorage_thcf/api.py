@@ -17,6 +17,56 @@ from collections import OrderedDict
 LOGGER = logging.getLogger(__name__)
 
 
+class OCARecord:
+    """
+    class DefinedConsent(OCARecord):
+        def __init__(self, label, usage_policy, oca_data, *, oca_schema_dri=None, dri=None):
+            self.label = label
+            self.usage_policy = usage_policy
+            self.oca_data = oca_data
+            super().__init__(oca_schema_dri, dri)
+    """
+
+    def __init__(self, oca_schema_dri=None, dri=None):
+        self.oca_schema_dri = oca_schema_dri
+        self.dri = dri
+
+    def __repr__(self) -> str:
+        return json.dumps(self.__dict__)
+
+    def values(self):
+        result = self.__dict__.copy()
+        result.pop("dri", None)
+        result.pop("oca_schema_dri", None)
+        return result
+
+    def serialize(self):
+        result = self.__dict__.copy()
+
+        to_pop = []
+        for key, value in result.items():
+            if value == None:
+                to_pop.append(key)
+
+        for i in to_pop:
+            result.pop(i, None)
+
+        return result
+
+    async def save(self, context):
+        self.dri = await pds_save(
+            context, self.values(), oca_schema_dri=self.oca_schema_dri
+        )
+        return self.dri
+
+    @classmethod
+    async def load(cls, context, dri):
+        fetch = await pds_load(context, dri, with_meta=True)
+        schema = {"oca_schema_dri": fetch.get("oca_schema_dri"), "dri": dri}
+        schema.update(fetch["content"])
+        return cls(**schema)
+
+
 async def pds_active_get_full_name(context):
     """Retrieves saved pds information from the storage"""
     try:
@@ -61,6 +111,8 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
         pass
     except TypeError:
         pass
+    except KeyError:
+        return result
 
     if with_meta:
         return result
@@ -95,43 +147,6 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
         assert_type(payload_id, str)
 
     return payload_id
-
-
-async def pds_save_model(
-    context,
-    model,
-    oca_schema_dri: str = None,
-):
-    if __debug__:
-        assert not isinstance(model, (str, dict, tuple))
-
-    serialized = None
-    if issubclass(type(model), BaseRecord):
-        serialized = model.value
-    else:
-        serialized = model.__dict__
-
-    if __debug__:
-        assert isinstance(serialized, dict)
-
-    result = await pds_save(context, serialized, oca_schema_dri)
-    return result
-
-
-async def pds_load_model(context, id: str, model_class):
-    if __debug__:
-        assert isinstance(id, str)
-
-    load = await pds_load(context, id)
-    try:
-        result = model_class(**load)
-    except KeyError:
-        raise PDSError("Invalid data to model mapping. Incorrect data structure.")
-
-    if __debug__:
-        assert isinstance(result, model_class)
-
-    return result
 
 
 async def pds_query_model_by_oca_schema_dri(context, oca_schema_dri):
@@ -368,4 +383,4 @@ async def test_usage_policy():
     print(await oyd_verify_usage_policy(usage_pol_1, usage_pol_2))
 
 
-run_standalone_async(__name__, test_usage_policy)
+# run_standalone_async(__name__, test_usage_policy)

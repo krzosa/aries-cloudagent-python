@@ -20,9 +20,9 @@ class LocalPDS(BasePDS):
         """
         result = self.storage.get(id)
 
-        return {"content": result}
+        return result
 
-    async def save(self, record, metadata: dict) -> str:
+    async def save(self, record, oca_schema_dri=None, *, meta={}) -> str:
         dri_value = None
         if isinstance(record, str):
             dri_value = encode(record)
@@ -31,7 +31,7 @@ class LocalPDS(BasePDS):
         else:
             raise AssertionError("Invalid type")
 
-        self.storage[dri_value] = record
+        self.storage[dri_value] = {"oca_schema_dri": oca_schema_dri, "content": record}
 
         return dri_value
 

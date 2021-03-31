@@ -1,4 +1,3 @@
-from aries_cloudagent.wallet.base import BaseWallet
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
@@ -13,11 +12,9 @@ from .api import (
     pds_get,
     pds_get_by_full_name,
     pds_load,
-    pds_load_model,
     pds_query_by_oca_schema_dri,
     pds_save,
     pds_save_chunks,
-    pds_save_model,
     pds_set_setting,
 )
 from .error import PDSError
@@ -352,43 +349,6 @@ async def post_oca_schema_chunks(request: web.BaseRequest):
     return web.json_response()
 
 
-class TestModel:
-    def __init__(self, field1, field2):
-        self.field1 = field1
-        self.field2 = field2
-
-
-@docs(
-    tags=["Personal Data Storage"],
-    summary="Post data in bulk",
-)
-async def test_endpoint(request: web.BaseRequest):
-    context = request.app["request_context"]
-
-    test = TestModel("1234", "asdaf")
-
-    payload_id = await pds_save_model(context, test)
-    print("Payload id", payload_id)
-
-    result = await pds_load_model(context, payload_id, TestModel)
-    print(result)
-
-    # wallet = await context.inject(BaseWallet)
-
-    # key = await wallet.create_signing_key(
-    #     "rwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc="
-    # )
-
-    # sign = await wallet.sign_message(bytes([104, 105]), key.verkey)
-
-    # print("Verkey: ", key)
-    # print("Signed message: ", sign)
-    # sign = list(sign)
-    # print("bytes: ", bytes([104, 105]))
-
-    return web.json_response(result.__dict__)
-
-
 async def register(app: web.Application):
     """Register routes."""
     app.add_routes(
@@ -423,11 +383,6 @@ async def register(app: web.Application):
             web.get(
                 "/pds/oca-schema-chunks/",
                 get_oca_schema_chunks,
-                allow_head=False,
-            ),
-            web.get(
-                "/pds/test/",
-                test_endpoint,
                 allow_head=False,
             ),
             web.post(
