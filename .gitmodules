@@ -5,3 +5,6 @@
 [submodule "aries-services-plugin"]
 	path = aries-services-plugin
 	url = https://github.com/THCLab/aries-services-plugin
+[submodule "keri-python-ffi"]
+	path = keri-python-ffi
+	url = https://github.com/THCLab/keri-python-ffi.git

@@ -1,5 +1,6 @@
 """Indy implementation of BaseWallet interface."""
 
+from ..aathcf.utils import run_standalone_async
 import json
 import logging
 
@@ -21,7 +22,7 @@ from .base import BaseWallet, KeyInfo, DIDInfo
 from .crypto import validate_seed
 from .error import WalletError, WalletDuplicateError, WalletNotFoundError
 from .plugin import load_postgres_plugin
-from .util import bytes_to_b64
+from .util import b64_to_str, bytes_to_b64
 
 
 class IndyWallet(BaseWallet):
@@ -719,3 +720,45 @@ class IndyWallet(BaseWallet):
     async def generate_wallet_key(self, seed: str = None) -> str:
         """Generate a raw Indy wallet key."""
         return await indy.wallet.generate_wallet_key(seed)
+
+
+async def test_indy_():
+    wallet = IndyWallet()
+    await wallet.open()
+    key1 = await wallet.create_signing_key()
+    key2 = await wallet.create_signing_key()
+    sig = await wallet.sign_message("message", key1.verkey)
+    # print(sig)
+    pack = await wallet.pack_message("message", [key1.verkey], key2.verkey)
+    print(pack)
+
+
+async def test_indy():
+
+    # await test_indy_()
+    result = {
+        "protected": "eyJlbmMiOiJ4Y2hhY2hhMjBwb2x5MTMwNV9pZXRmIiwidHlwIjoiSldNLzEuMCIsImFsZyI6IkF1dGhjcnlwdCIsInJlY2lwaWVudHMiOlt7ImVuY3J5cHRlZF9rZXkiOiJuMzM5REhXYzIyMkd1S0FMUnZNREpmc3A1dlZrOFFoVE9ESEVHOVduZUh1MkU3Wkh4N0JYTEUyd1BOZXN1TjZTIiwiaGVhZGVyIjp7ImtpZCI6IkF6eXFMZzJURnh1bWVVZ3QyZldZdEZTY0V2dnFxQW9EZlRmM1VKcXFiQ2VLIiwiaXYiOiJwblpKMlloWXJDWi03SWtpd1JsVi1pZUJBWmNZTmJGRyIsInNlbmRlciI6InFUWVppcnNrbjVWSjZsVHY5RkJHTF9HeGpGR25TU0NCNDhqTmhXWmlreVlueHZBVmJ1emN1aTZLVVhiNjIyWmQ2Ul9qaExjREFkVkduWm4zY0Q1UzZOejlxQVFwaHhSa2xseS1yeVZvemJXWWRLM2Y2Wjh3RUdXdHE0TT0ifX1dfQ==",
+        "iv": "E-yHSDmAq-ClsVzz",
+        "ciphertext": "TjLT1yIY9Q==",
+        "tag": "GA6FgR6KpPIA-YSlmPB1PA==",
+    }
+
+    print(b64_to_str(result["protected"]))
+    jwt = {
+        "enc": "xchacha20poly1305_ietf",
+        "typ": "JWM/1.0",
+        "alg": "Authcrypt",
+        "recipients": [
+            {
+                "encrypted_key": "n339DHWc222GuKALRvMDJfsp5vVk8QhTODHEG9WneHu2E7ZHx7BXLE2wPNesuN6S",
+                "header": {
+                    "kid": "AzyqLg2TFxumeUgt2fWYtFScEvvqqAoDfTf3UJqqbCeK",
+                    "iv": "pnZJ2YhYrCZ-7IkiwRlV-ieBAZcYNbFG",
+                    "sender": "qTYZirskn5VJ6lTv9FBGL_GxjFGnSSCB48jNhWZikyYnxvAVbuzcui6KUXb622Zd6R_jhLcDAdVGnZn3cD5S6Nz9qAQphxRklly-ryVozbWYdK3f6Z8wEGWtq4M=",
+                },
+            }
+        ],
+    }
+
+
+run_standalone_async(__name__, test_indy)
