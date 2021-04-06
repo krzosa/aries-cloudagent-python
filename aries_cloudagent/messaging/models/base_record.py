@@ -297,6 +297,7 @@ class BaseRecord(BaseModel):
         log_params: Mapping[str, Any] = None,
         log_override: bool = False,
         webhook: bool = None,
+        custom_id_gen=None,
     ) -> str:
         """Persist the record to storage.
 
@@ -317,7 +318,10 @@ class BaseRecord(BaseModel):
                 await storage.update_record_tags(record, record.tags)
                 new_record = False
             else:
-                self._id = str(uuid.uuid4())
+                if custom_id_gen is None:
+                    self._id = str(uuid.uuid4())
+                else:
+                    self._id = custom_id_gen
                 self.created_at = self.updated_at
                 await storage.add_record(self.storage_record)
                 new_record = True

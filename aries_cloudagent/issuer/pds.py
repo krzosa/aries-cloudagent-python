@@ -143,20 +143,22 @@ class PDSIssuer(BaseIssuer):
         credential_values,
         credential_type: str or list = None,
         subject_public_did: str = None,
+        *,
+        my_did=None,
     ) -> str:
-        my_did = await self.wallet.get_public_did()
-        if not isinstance(my_did, DIDInfo) or my_did[0] is None:
-            raise IssuerError("Public did is not registered!")
-        if not isinstance(credential_values, dict) or credential_values == {}:
-            raise IssuerError("credential_values is Null")
+
+        if my_did is None:
+            my_did = await self.wallet.get_public_did()
+            if not isinstance(my_did, DIDInfo) or my_did[0] is None:
+                raise IssuerError("Public did is not registered!")
+            if not isinstance(credential_values, dict) or credential_values == {}:
+                raise IssuerError("credential_values is Null")
 
         my_did = my_did[0]
         credential_dict = OrderedDict()
 
         if isinstance(subject_public_did, str):
             credential_values.update({"subject_id": subject_public_did})
-        else:
-            self.logger.warning("Invalid type of their public did")
 
         # This documents should exist, those should be cached
         # it seems to be establishing a semantic context, meaning

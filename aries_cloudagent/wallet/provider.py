@@ -33,7 +33,7 @@ class WalletProvider(BaseProvider):
             return self.cached_wallets[wallet_type]
 
         wallet_class = self.WALLET_TYPES.get(wallet_type, wallet_type)
-        print("Creating a wallet: ", wallet_type, wallet_class)
+        # print("Creating a wallet: ", wallet_type, wallet_class)
 
         LOGGER.info("Opening wallet type: %s", wallet_type)
 

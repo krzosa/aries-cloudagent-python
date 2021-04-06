@@ -40,10 +40,15 @@ async def build_context(pds_type="own_your_data_data_vault", connection_record={
     return context
 
 
-def build_request_stub(context, body):
+def build_request_stub(context, body={}, *, match_info={}):
     async def outbound_handler(model_to_send, connection_id):
-        print(model_to_send)
-        print(connection_id)
+        msg = (
+            "outbound_handler model:"
+            + str(model_to_send)
+            + " connection_id: "
+            + connection_id
+        )
+        # print(msg)
 
     class Stub:
         def __init__(self, _context, _body):
@@ -52,6 +57,8 @@ def build_request_stub(context, body):
                 "outbound_message_router": outbound_handler,
             }
             self._body = _body
+            self.send_models = []
+            self.match_info = match_info
 
         async def json(self):
             return self._body
@@ -61,7 +68,8 @@ def build_request_stub(context, body):
 
 
 def validate_endpoint_output(function, output):
-    result = function.__schemas__[0]["schema"].validate(json.loads(output))
+    responses = function.__apispec__.get("responses")
+    result = responses[str(output.status)]["schema"].validate(json.loads(output.body))
     assert result == {}, (
         function.__name__ + " endpoint invalid output!\n" + json.dumps(result)
     )
@@ -70,7 +78,7 @@ def validate_endpoint_output(function, output):
 async def call_endpoint_validate(function, request):
     """Calls an endpoint function. Validates the result based on a decorator. request_schema"""
     result = await function(request)
-    validate_endpoint_output(function, result.body)
+    validate_endpoint_output(function, result)
     return result
 
 

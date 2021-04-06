@@ -139,13 +139,12 @@ class PDSActivate(OpenAPISchema):
 class NewApplication(OpenAPISchema):
     user_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
     service_uuid = fields.String(required=True)
+    connection_uuid = fields.String(required=True)
 
 
 class Application(OpenAPISchema):
-    appliance_uuid = fields.String(required=True)
-    updated_at = fields.String(required=True)
-    created_at = fields.String(required=True)
     connection_uuid = fields.String(required=True)
+    appliance_uuid = fields.String(required=True)
     service_uuid = fields.String(required=True)
     consent = fields.Nested(lambda: OCASchemaDRIDataTuple(), required=True)
     service = fields.Nested(lambda: OCASchema(), required=True)
@@ -159,7 +158,7 @@ class ArrayOfApplications(Application):
 
 
 class MineApplication(Application):
-    service_user_data = fields.String(required=True, description='JSON serialized service application data')
+    service_user_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True, description='JSON serialized service application data')
 
 
 class ArrayOfMineApplications(MineApplication):
