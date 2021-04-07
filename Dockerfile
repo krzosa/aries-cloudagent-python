@@ -6,21 +6,15 @@ ADD requirements*.txt ./
 
 RUN pip3 install --no-cache-dir -r requirements.txt -r requirements.dev.txt -r requirements.indy.txt
 
-COPY aries_cloudagent ./aries_cloudagent
-COPY aries-acapy-plugin-toolbox ./aries-acapy-plugin-toolbox
-COPY aries-services-plugin/services ./aries-acapy-plugin-toolbox/services
-COPY bin ./bin
-COPY README.md ./
+COPY aries_cloudagent/version.py ./aries_cloudagent/version.py
+COPY bin/aca-py ./bin/aca-py
 COPY setup.py ./
-COPY startup.sh ./
 
 USER root
 
 RUN pip3 install --no-cache-dir -e ".[indy]"
 RUN /bin/bash -c "python3 -m venv env"
 RUN /bin/bash -c "source env/bin/activate"
-RUN /bin/bash -c "pip3 install -e /home/indy/aries-acapy-plugin-toolbox"
-RUN pip3 install --no-cache-dir -r /home/indy/aries-acapy-plugin-toolbox/requirements.txt
 
 RUN apt-get update
 RUN apt-get install -y wget gcc openssl pkg-config libssl-dev
@@ -57,3 +51,13 @@ RUN tar xzvf libsovtoken.tar.gz; \
         cd libsovtoken-1.0.1/libsovtoken; \
         cargo build
 ENV LIBSOVTOKEN=/home/indy/libsovtoken-1.0.1/libsovtoken/target/debug/libsovtoken.so
+
+COPY README.md ./
+COPY bin/aca-py ./bin/aca-py
+COPY aries_cloudagent ./aries_cloudagent
+COPY aries-acapy-plugin-toolbox ./aries-acapy-plugin-toolbox
+COPY aries-services-plugin/services ./aries-acapy-plugin-toolbox/services
+
+RUN /bin/bash -c "pip3 install -e /home/indy/aries-acapy-plugin-toolbox"
+RUN pip3 install --no-cache-dir -r /home/indy/aries-acapy-plugin-toolbox/requirements.txt
+COPY startup.sh ./
