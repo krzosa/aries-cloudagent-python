@@ -138,14 +138,12 @@ class OwnYourDataVault(BasePDS):
             )
             result = await unpack_response(result)
             result = json.loads(result)
-            print(result)
             result, err = map_parsed_usage_policy(result, cached_schema_to_map_against)
             await self.save(
                 result,
                 {"table": "tda.oca_chunks.H5F2YgEbXpSZjcNqAYevfGPFXSWUV1d2PnVg2ubkkKb"},
                 addition_meta={"missing": err},
             )
-            print(result, err)
 
     async def update_token_when_expired(self):
         time_elapsed = time.time() - (self.token_timestamp - 10)

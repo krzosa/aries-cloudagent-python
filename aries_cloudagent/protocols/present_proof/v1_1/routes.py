@@ -1,6 +1,8 @@
 """Admin routes for presentations."""
 
-from aries_cloudagent.aathcf.utils import run_standalone_async
+import builtins
+from aries_cloudagent.pdstorage_thcf.own_your_data import OwnYourDataVault
+from aries_cloudagent.aathcf.utils import run_standalone_async, build_context
 import json
 
 from aiohttp import web
@@ -21,6 +23,7 @@ from .models.utils import retrieve_exchange
 import logging
 from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
+    pds_get_active,
     pds_load,
     pds_oca_data_format_save,
     pds_save_a,
@@ -284,7 +287,7 @@ async def verify_usage_policy(controller_usage_policy, subject_usage_policy):
 
         if result["code"] == 0:
             return True, result["message"]
-        return False, result["message"]
+        return False, result["error"]
 
 
 @docs(tags=["present-proof"], summary="retrieve exchange record")
@@ -389,10 +392,47 @@ def post_process_routes(app: web.Application):
 
 
 async def test_usage_policy():
-    usage_pol_1 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
-    usage_pol_2 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
-    usage, _ = await verify_usage_policy(usage_pol_2, usage_pol_1)
-    print(usage)
+    {
+        "local, default": {},
+        "own_your_data, dip21.demo@gmail.com": {
+            "api_url": "https://data-vault.eu",
+            "client_id": "QXw8w203kibmQYdXRHiS1lrtxy-o7rmdwILqAF2RnWI",
+            "client_secret": "4CbCqomFaqaMbpMyASpaRlKc2IDJnKvddsgtf2M5Ss0",
+            "grant_type": "client_credentials",
+            "scope": None,
+        },
+    }
+
+    {
+        "own_your_data, ": {
+            "api_url": "https://sc.dip-clinic.data-container.net",
+            "client_id": "af34d25dc21d5ee5ad0a8da9d035954dac0a286b7fce2028222657e76c89b406",
+            "client_secret": "3563ca90d9a6be2387849c2253f565ba68a58bd77f83404ffeb77727a019d7ab",
+            "grant_type": "client_credentials",
+            "scope": "admin",
+        },
+        "local, default": {},
+    }
+    context = await build_context()
+    vault_1 = OwnYourDataVault()
+    vault_1.settings["client_id"] = "QXw8w203kibmQYdXRHiS1lrtxy-o7rmdwILqAF2RnWI"
+    vault_1.settings["client_secret"] = "4CbCqomFaqaMbpMyASpaRlKc2IDJnKvddsgtf2M5Ss0"
+    vault_1.settings["api_url"] = "https://data-vault.eu"
+    usage_vault_1 = await vault_1.get_usage_policy()
+
+    vault_2 = OwnYourDataVault()
+    vault_2.settings[
+        "client_id"
+    ] = "af34d25dc21d5ee5ad0a8da9d035954dac0a286b7fce2028222657e76c89b406"
+    vault_2.settings[
+        "client_secret"
+    ] = "3563ca90d9a6be2387849c2253f565ba68a58bd77f83404ffeb77727a019d7ab"
+    vault_2.settings["api_url"] = "https://sc.dip-clinic.data-container.net"
+    vault_2.settings["scope"] = "admin"
+    usage_vault_2 = await vault_2.get_usage_policy()
+
+    usage, msg = await verify_usage_policy(usage_vault_2, usage_vault_1)
+    print(usage, msg)
 
 
 run_standalone_async(__name__, test_usage_policy)
