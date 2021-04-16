@@ -133,7 +133,9 @@ class PDSIssuer(BaseIssuer):
         revoc_reg_id: str = None,
         tails_file_path: str = None,
     ) -> Tuple[str, str]:
-        credential = await self.create_credential_ex(credential_values, schema.get("credential_type"))
+        credential = await self.create_credential_ex(
+            credential_values, schema.get("credential_type")
+        )
         return [credential, None]
 
     async def create_credential_ex(

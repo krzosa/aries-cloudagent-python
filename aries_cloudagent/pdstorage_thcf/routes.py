@@ -12,7 +12,7 @@ from aiohttp_apispec import (
 
 from marshmallow import fields, validate, Schema
 from .base import BasePDS
-from .api import pds_load, pds_save, load_multiple
+from .api import pds_load, pds_save, pds_save_a, load_multiple
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..wallet.error import WalletError
@@ -27,6 +27,7 @@ OCA_DATA_CHUNKS = "tda.oca_chunks"
 
 class SaveRecordSchema(Schema):
     payload = fields.Str(required=True)
+    oca_schema_dri = fields.Str(required=False)
 
 
 class SetActiveStorageTypeSchema(Schema):
@@ -57,7 +58,9 @@ async def save_record(request: web.BaseRequest):
     body = await request.json()
 
     try:
-        payload_id = await pds_save(context, body.get("payload"))
+        payload_id = await pds_save_a(
+            context, body.get("payload"), table=body.get("oca_schema_dri")
+        )
     except PDSError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
