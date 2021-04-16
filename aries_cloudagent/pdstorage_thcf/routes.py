@@ -24,6 +24,7 @@ import aries_cloudagent.generated_models as model
 
 OCA_DATA_CHUNKS = "tda.oca_chunks"
 
+
 class SaveRecordSchema(Schema):
     payload = fields.Str(required=True)
 
@@ -193,7 +194,6 @@ async def get_settings(request: web.BaseRequest):
     try:
         saved_pds = await SavedPDS.query(context)
         assert isinstance(saved_pds, list), f"not list {saved_pds}, {type(saved_pds)}"
-        print("get_settings saved_pds:", saved_pds)
     except StorageError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
 

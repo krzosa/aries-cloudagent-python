@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from aiohttp import ClientSession, ClientConnectionError, ClientError
 from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
 import time
-from collections import OrderedDict
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ class OwnYourDataVault(BasePDS):
                 url, headers={"Authorization": "Bearer " + self.token["access_token"]}
             )
             result = await unpack_response(result)
-            result_dict: dict = json.loads(result, object_pairs_hook=OrderedDict)
+            result_dict: dict = json.loads(result)
 
         return result_dict
 
