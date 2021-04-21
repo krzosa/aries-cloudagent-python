@@ -67,9 +67,8 @@ class DataVault(BasePDS):
         async with ClientSession() as session:
             response = await session.post(url=url, data=data)
             response_text = await response.text()
-            response_json = json.loads(response_text)
 
-        return response_json["content_dri"]
+        return response_text
 
     async def load_multiple(
         self, *, table: str = None, oca_schema_base_dri: str = None

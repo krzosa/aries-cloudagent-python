@@ -1,18 +1,15 @@
-import logging
-import json
-
 from aiohttp import web
 from aiohttp_apispec import (
     docs,
-    match_info_schema,
     querystring_schema,
     request_schema,
     response_schema,
 )
 
-from marshmallow import fields, validate, Schema
+from aries_cloudagent.aathcf.utils import run_standalone_async, build_context
+from marshmallow import Schema, fields
 from .base import BasePDS
-from .api import pds_load, pds_save, pds_save_a, load_multiple
+from .api import load_multiple, pds_load, pds_save_a
 from .error import PDSError
 from ..connections.models.connection_record import ConnectionRecord
 from ..wallet.error import WalletError
@@ -62,9 +59,18 @@ async def save_record(request: web.BaseRequest):
             context, body.get("payload"), table=body.get("oca_schema_dri")
         )
     except PDSError as err:
-        raise web.HTTPInternalServerError(reason=err.roll_up)
+        raise web.HTTPInternalServerError(reason=err.message)
 
     return web.json_response({"success": True, "payload_id": payload_id})
+
+
+async def test_save():
+    context = await build_context()
+    payload_id = await pds_save_a(context, "asdd", table="123")
+    print(payload_id)
+
+
+run_standalone_async(__name__, test_save)
 
 
 @docs(

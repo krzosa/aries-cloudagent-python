@@ -1,11 +1,9 @@
 from aries_cloudagent.messaging.base_handler import HandlerException
-from aries_cloudagent.pdstorage_thcf.api import pds_get_by_name, pds_get_active
+from aries_cloudagent.pdstorage_thcf.api import pds_get_active
 
 from aries_cloudagent.pdstorage_thcf.models.saved_personal_storage import SavedPDS
 from aries_cloudagent.config.settings import Settings
 from aries_cloudagent.config.default_context import DefaultContextBuilder
-from aries_cloudagent.messaging.base_handler import HandlerException
-import json
 
 
 def run_standalone_async(name, func):
