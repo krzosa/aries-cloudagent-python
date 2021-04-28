@@ -59,19 +59,18 @@ async def issue_credential(request: web.BaseRequest):
 
     connection = await retrieve_connection(context, exchange.connection_id)
     request = exchange.credential_request
-    
+
     try:
         issuer: BaseIssuer = await context.inject(BaseIssuer)
         credential = await issuer.create_credential_ex(
             request.get("credential_values"),
             request.get("credential_type"),
-            exchange.their_public_did
+            exchange.their_public_did,
         )
     except IssuerError as err:
         raise web.HTTPInternalServerError(
             reason=f"Error occured while creating a credential {err.roll_up}"
         )
-
 
     LOGGER.info("CREDENTIAL %s", credential)
     issue = CredentialIssue(credential=credential)
