@@ -1,13 +1,16 @@
+from aries_cloudagent.aathcf.utils import build_context, run_standalone_async
+from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
+from aries_cloudagent.storage.error import StorageNotFoundError
 from .base import BasePDS
-from .error import PDSNotFoundError
+from .error import PDSError, PDSNotFoundError, PDSRecordNotFoundError
 from .models.saved_personal_storage import SavedPDS
 import hashlib
 import multihash
 import logging
 import multibase
-from aries_cloudagent.storage.error import StorageNotFoundError
+
 from .models.table_that_matches_dris_with_pds import DriStorageMatchTable
-from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
+
 import json
 from collections import OrderedDict
 
@@ -75,6 +78,60 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
         return result
     else:
         return result["content"]
+
+
+async def pds_link_dri(context, dri, link_with_dris):
+    if isinstance(link_with_dris, str):
+        link_with_dris = [link_with_dris]
+    elif isinstance(link_with_dris, list):
+        pass
+    else:
+        raise TypeError("Expected: list or string")
+
+    if __debug__:
+        assert isinstance(link_with_dris, list)
+
+    pds = await pds_get_active(context)
+    if "link" in dir(pds):
+        await pds.link(dri, link_with_dris)
+    else:
+        LOGGER.warning(
+            "This is an own your data pds extension. current pds doesn't support this method"
+        )
+
+
+async def __test_pds_link():
+    context = await build_context()
+
+    import random
+
+    dri1 = await pds_save_a(context, "124inmjfa0dioq-0dq" + str(random.random()))
+    dri2 = await pds_save_a(context, "1asdad24inmjfa0dioq-0dq" + str(random.random()))
+    await pds_link_dri(context, dri1, dri2)
+
+    try:
+        await pds_link_dri(context, "1wd1fc", "difhd908f")
+    except PDSRecordNotFoundError as err:
+        assert err
+    except PDSError as err:
+        assert not err
+    else:
+        assert not "invalid codepath"
+
+    context = await build_context("local")
+
+    import random
+
+    dri1 = await pds_save_a(context, "124inmjfa0dioq-0dq" + str(random.random()))
+    dri2 = await pds_save_a(context, "1asdad24inmjfa0dioq-0dq" + str(random.random()))
+    await pds_link_dri(context, dri1, dri2)
+
+    try:
+        await pds_link_dri(context, "1wd1fc", "difhd908f")
+    except PDSRecordNotFoundError as err:
+        assert err
+    except PDSError as err:
+        assert not err
 
 
 async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
@@ -198,3 +255,6 @@ async def pds_oca_data_format_serialize_dict_recursive(context, dct):
     for k, v in dct.items():
         new_dict[k] = await pds_oca_data_format_serialize_item_recursive(context, k, v)
     return new_dict
+
+
+run_standalone_async(__name__, __test_pds_link)

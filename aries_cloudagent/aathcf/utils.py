@@ -1,5 +1,5 @@
 from aries_cloudagent.messaging.base_handler import HandlerException
-from aries_cloudagent.pdstorage_thcf.api import pds_get_active
+
 
 from aries_cloudagent.pdstorage_thcf.models.saved_personal_storage import SavedPDS
 from aries_cloudagent.config.settings import Settings
@@ -35,6 +35,8 @@ async def build_context(pds_type="own_your_data", connection_record={}):
     context = await build_standalone_context()
     default_storage = SavedPDS(type=pds_type, state=SavedPDS.ACTIVE)
     await default_storage.save(context)
+    from aries_cloudagent.pdstorage_thcf.api import pds_get_active
+
     pds = await pds_get_active(context)
 
     if pds_type == "own_your_data":

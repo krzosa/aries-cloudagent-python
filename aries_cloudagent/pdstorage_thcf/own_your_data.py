@@ -151,9 +151,6 @@ class OwnYourDataVault(BasePDS):
             await self.update_token()
 
     async def load(self, dri: str) -> dict:
-        """
-        TODO: Errors checking
-        """
         assert_type(dri, str)
         await self.update_token_when_expired()
 
@@ -166,6 +163,18 @@ class OwnYourDataVault(BasePDS):
             result_dict: dict = json.loads(result)
 
         return result_dict
+
+    async def link(self, source_dri, with_targets):
+        await self.update_token_when_expired()
+        body = {"source": source_dri, "targets": with_targets}
+        async with ClientSession() as session:
+            url = f"{self.api_url}/api/relation?p=dri"
+            response = await session.post(
+                url,
+                headers={"Authorization": "Bearer " + self.token["access_token"]},
+                json=body,
+            )
+            await unpack_response(response)
 
     async def save(self, record, metadata: dict, *, addition_meta={}) -> str:
         """
@@ -195,27 +204,20 @@ class OwnYourDataVault(BasePDS):
             "timestamp": int(round(time.time() * 1000)),  # current time in milliseconds
         }
         LOGGER.debug("OYD save record %s metadata %s", record, meta)
+
+        if meta.get("table") is not None:
+            table = f"{table}.{meta.get('table')}"
+
+        body = {
+            "content": record,
+            "dri": dri_value,
+            "table_name": table,
+            "mime_type": "application/json",
+        }
+        if addition_meta:
+            body.update(addition_meta)
+
         async with ClientSession() as session:
-            """
-            Pack request body
-            """
-
-            if meta.get("table") is not None:
-                table = f"{table}.{meta.get('table')}"
-
-            body = {
-                "content": record,
-                "dri": dri_value,
-                "table_name": table,
-                "mime_type": "application/json",
-            }
-            if addition_meta:
-                body.update(addition_meta)
-
-            """
-            Request
-            """
-
             url = f"{self.api_url}/api/data"
             response = await session.post(
                 url,
@@ -497,13 +499,24 @@ def test_format_2():
     }, result
 
 
+async def test_link(vault):
+    await vault.link(
+        "zQmVNgyT8sYwuLby5AMp5NuPnFjwHsLVYsv2QxyUSGfrAs7",
+        ["zQmZZWT86LeNTTemdLc5vs4TybcihrHSpjxJDyCJXY1A4Lw"],
+    )
+
+
 async def test_usage_policy_parse():
     vault = OwnYourDataVault()
 
     vault.settings["client_id"] = "-s2bdkM_cv7KYDF5xg_Lj6vil1ZJaLQJ79duOW7J9g4"
     vault.settings["client_secret"] = "s_dR8dzbVES_vvc1-nyb1O_cuzyCz2_bRd3Lr12s4ug"
     vault.settings["api_url"] = "https://data-vault.eu"
+    await test_link(vault)
     await vault.update_token()
+    # result = await vault.load_multiple()
+    # print(result)
+
     # test_format()
     # test_format_2()
 
