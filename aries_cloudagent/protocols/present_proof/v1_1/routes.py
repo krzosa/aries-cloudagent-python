@@ -162,10 +162,6 @@ async def present_proof_endpoint(request: web.BaseRequest):
 
     exchange.state = exchange.STATE_PRESENTATION_SENT
     await exchange.presentation_pds_set(context, json.loads(presentation))
-    await pds_link_dri(
-        context,
-        exchange.presentation_dri,
-    )
     await exchange.save(context)
 
     return web.json_response(
@@ -185,7 +181,7 @@ async def acknowledge_proof(request: web.BaseRequest):
     query = request.query
 
     exchange: THCFPresentationExchange = await retrieve_exchange(
-        context, query.get("exchange_record_id"), web.HTTPNotFound
+        context, query["exchange_record_id"], web.HTTPNotFound
     )
 
     if exchange.role != exchange.ROLE_VERIFIER:
