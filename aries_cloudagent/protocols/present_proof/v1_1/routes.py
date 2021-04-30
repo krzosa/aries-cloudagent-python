@@ -1,6 +1,5 @@
 """Admin routes for presentations."""
 
-import builtins
 from aries_cloudagent.pdstorage_thcf.own_your_data import OwnYourDataVault
 from aries_cloudagent.aathcf.utils import run_standalone_async, build_context
 import json
@@ -23,10 +22,7 @@ from .models.utils import retrieve_exchange
 import logging
 from aries_cloudagent.pdstorage_thcf.api import (
     load_multiple,
-    pds_get_active,
-    pds_load,
-    pds_oca_data_format_save,
-    pds_save_a,
+    pds_link_dri,
     pds_get_usage_policy_if_active_pds_supports_it,
 )
 from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
@@ -36,6 +32,7 @@ from aries_cloudagent.protocols.issue_credential.v1_1.routes import (
 )
 from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
 from .messages.acknowledge_proof import AcknowledgeProof
+from aiohttp import ClientSession, ClientTimeout
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +64,7 @@ class AcknowledgeProofSchema(OpenAPISchema):
 
 @docs(tags=["present-proof"], summary="Sends a proof presentation")
 @request_schema(PresentationRequestAPISchema())
-async def request_presentation_api(request: web.BaseRequest):
+async def request_presentation_endpoint(request: web.BaseRequest):
     """Request handler for sending a presentation."""
     context = request.app["request_context"]
     outbound_handler = request.app["outbound_message_router"]
@@ -115,7 +112,7 @@ async def request_presentation_api(request: web.BaseRequest):
 
 @docs(tags=["present-proof"], summary="Send a credential presentation")
 @request_schema(PresentProofAPISchema())
-async def present_proof_api(request: web.BaseRequest):
+async def present_proof_endpoint(request: web.BaseRequest):
     """
     Allows to respond to an already existing exchange with a proof presentation.
 
@@ -165,6 +162,10 @@ async def present_proof_api(request: web.BaseRequest):
 
     exchange.state = exchange.STATE_PRESENTATION_SENT
     await exchange.presentation_pds_set(context, json.loads(presentation))
+    await pds_link_dri(
+        context,
+        exchange.presentation_dri,
+    )
     await exchange.save(context)
 
     return web.json_response(
@@ -221,6 +222,9 @@ async def acknowledge_proof(request: web.BaseRequest):
 
     exchange.state = exchange.STATE_ACKNOWLEDGED
     await exchange.verifier_ack_cred_pds_set(context, credential)
+    await pds_link_dri(
+        context, exchange.presentation_dri, exchange.acknowledgment_credential_dri
+    )
     await exchange.save(context)
     return web.json_response(
         {
@@ -230,46 +234,6 @@ async def acknowledge_proof(request: web.BaseRequest):
             "ack_credential_dri": exchange.acknowledgment_credential_dri,
         }
     )
-
-
-class DebugEndpointSchema(OpenAPISchema):
-    # {DRI1: [{timestamp: 23423453453534, data: {...}},{}], DRI2: [{},{}], DRI3: [{},{}] }
-    #     {d: {456...}, t: Date.current.getMilliseconds()} } d - data; t - timestamp
-    oca_data = fields.List(fields.Str())
-
-
-@docs(tags=["PersonalDataStorage"])
-@querystring_schema(DebugEndpointSchema)
-async def debug_endpoint(request: web.BaseRequest):
-    context = request.app["request_context"]
-
-    data = {"data": "data"}
-    payload_id = await pds_save_a(context, data, oca_schema_dri="12345", table="test")
-    ret = await pds_load(context, payload_id)
-    assert ret == data
-
-    # body = await request.json()
-    # oca_data = body["oca_data"]
-    # print(oca_data)
-
-    data = {
-        "DRI:12345": {"t": "o", "p": {"address": "DRI:123456", "test_value": "ok"}},
-        "DRI:123456": {
-            "t": "o",
-            "p": {"second_dri": "DRI:1234567", "test_value": "ok"},
-        },
-        "DRI:1234567": {"t": "o", "p": {"third_dri": "DRI:123456", "test_value": "ok"}},
-        "1234567": {"t": "o", "p": {"third_dri": "DRI:123456", "test_value": "ok"}},
-    }
-
-    ids = await pds_oca_data_format_save(context, data)
-    # serialized = await pds_oca_data_format_serialize_dict_recursive(context, data)
-    multiple = await load_multiple(context, oca_schema_base_dri=["12345", "123456"])
-
-    return web.json_response({"success": True, "result": ids, "multiple": multiple})
-
-
-from aiohttp import ClientSession, FormData, ClientTimeout
 
 
 async def verify_usage_policy(controller_usage_policy, subject_usage_policy):
@@ -356,11 +320,11 @@ async def register(app: web.Application):
         [
             web.post(
                 "/present-proof/request",
-                request_presentation_api,
+                request_presentation_endpoint,
             ),
             web.post(
                 "/present-proof/present",
-                present_proof_api,
+                present_proof_endpoint,
             ),
             web.post(
                 "/present-proof/acknowledge",
@@ -371,7 +335,6 @@ async def register(app: web.Application):
                 retrieve_credential_exchange_api,
                 allow_head=False,
             ),
-            web.post("/present-proof/debug", debug_endpoint),
         ]
     )
 

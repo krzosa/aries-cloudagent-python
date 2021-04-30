@@ -1,3 +1,4 @@
+from aries_cloudagent.pdstorage_thcf.api import pds_link_dri
 from .....messaging.base_handler import (
     BaseHandler,
     BaseResponder,
@@ -43,7 +44,7 @@ class AcknowledgeProofHandler(BaseHandler):
         )
 
         try:
-            credential_dri = await holder.store_credential(
+            ack_credential_dri = await holder.store_credential(
                 credential_definition={},
                 credential_data=credential_data,
                 credential_request_metadata={},
@@ -51,7 +52,10 @@ class AcknowledgeProofHandler(BaseHandler):
         except HolderError as err:
             raise HandlerException("Error on store_credential async!", err.roll_up)
 
-        exchange.acknowledgment_credential_dri = credential_dri
+        exchange.acknowledgment_credential_dri = ack_credential_dri
+        await pds_link_dri(
+            context, exchange.presentation_dri, exchange.acknowledgment_credential_dri
+        )
         exchange.state = exchange.STATE_ACKNOWLEDGED
         await exchange.save(context)
 
@@ -61,6 +65,6 @@ class AcknowledgeProofHandler(BaseHandler):
                 "type": "acknowledge_proof",
                 "exchange_record_id": exchange._id,
                 "connection_id": responder.connection_id,
-                "acknowledgment_credential_dri": credential_dri,
+                "acknowledgment_credential_dri": ack_credential_dri,
             },
         )
