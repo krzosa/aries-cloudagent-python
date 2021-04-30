@@ -109,7 +109,6 @@ class PDSHolder(BaseHolder):
             self.logger.error,
         )
 
-        requested = presentation_request.get("requested_attributes")
         credential_id = requested_credentials.get("credential_id")
 
         if credential_id is None:
