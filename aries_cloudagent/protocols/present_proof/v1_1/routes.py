@@ -60,6 +60,7 @@ class RetrieveExchangeQuerySchema(OpenAPISchema):
 class AcknowledgeProofSchema(OpenAPISchema):
     exchange_record_id = fields.Str(required=True)
     status = fields.Boolean(required=True)
+    issuer_name = fields.Str(required=False)
 
 
 @docs(tags=["present-proof"], summary="Sends a proof presentation")
@@ -200,7 +201,9 @@ async def acknowledge_proof(request: web.BaseRequest):
                 "oca_data": {
                     "verified": str(query.get("status")),
                     "presentation_dri": exchange.presentation_dri,
-                    "issuer_name": context.settings.get("default_label"),
+                    "issuer_name": query.get("issuer_name")
+                    if query.get("issuer_name") is not None
+                    else context.settings.get("default_label"),
                 },
                 "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
             },
