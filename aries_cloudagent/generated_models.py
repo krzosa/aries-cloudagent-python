@@ -109,7 +109,7 @@ class ArrayOfCredentialDRI(ArrayOfCredentialDRIItem):
 class PresentationRequest(OpenAPISchema):
     uuid = fields.UUID(allow_none=True)
     oca_schema_dri = fields.String(required=True)
-    connection_uuid = fields.String(required=True)
+    connection_uuid = fields.UUID(required=True)
 
 
 class ArrayOfPresentationRequests(PresentationRequest):
@@ -121,7 +121,7 @@ class ArrayOfPresentationRequests(PresentationRequest):
 
 class Presentation(OpenAPISchema):
     presentation = fields.Dict(keys=fields.String(), values=fields.String())
-    connection_uuid = fields.String()
+    connection_uuid = fields.UUID()
 
 
 class ArrayOfPresentations(Presentation):
@@ -138,14 +138,15 @@ class PDSActivate(OpenAPISchema):
 
 class NewApplication(OpenAPISchema):
     user_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
-    service_uuid = fields.String(required=True)
-    connection_uuid = fields.String(required=True)
+    service_uuid = fields.UUID(required=True)
 
 
 class Application(OpenAPISchema):
-    connection_uuid = fields.String(required=True)
     appliance_uuid = fields.String(required=True)
-    service_uuid = fields.String(required=True)
+    updated_at = fields.AwareDateTime()
+    created_at = fields.AwareDateTime()
+    connection_uuid = fields.UUID(required=True)
+    service_uuid = fields.UUID(required=True)
     consent = fields.Nested(lambda: OCASchemaDRIDataTuple(), required=True)
     service = fields.Nested(lambda: OCASchema(), required=True)
 
@@ -255,7 +256,7 @@ class OCASchema(OpenAPISchema):
 
 
 class OCASchemaDRIDataTuple(OCASchema):
-    oca_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
+    oca_data = fields.Field(required=True)
 
 
 class Consent(OCASchemaDRIDataTuple):
@@ -323,8 +324,8 @@ class BaseService(OpenAPISchema):
 
 class Service(BaseService):
     service_uuid = fields.UUID(required=True)
-    updated_at = fields.String(allow_none=True)
-    created_at = fields.String(allow_none=True)
+    updated_at = fields.AwareDateTime(allow_none=True)
+    created_at = fields.AwareDateTime(allow_none=True)
     label = fields.String(required=True)
     service_schema_dri = fields.String(required=True, description='OCA Schema DRI')
 
@@ -412,7 +413,7 @@ class PdsSettingsInput:
 class PdsActivateInput:
     class Post:
         """
-        Choose a PDS for all the saving operations
+        Choose a PDS as data source for all the operations
         """
 
         pass
@@ -421,6 +422,10 @@ class PdsActivateInput:
 
 class PdsActiveInput:
     class Get:
+        """
+        Gets currently active driver instance.
+        """
+
         pass
 
 

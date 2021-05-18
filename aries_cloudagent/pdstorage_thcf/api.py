@@ -1,5 +1,5 @@
 from ..config.global_variables import USAGE_POLICY_VERIFY
-from ..aathcf.utils import run_standalone_async
+from ..aathcf.utils import build_context, run_standalone_async
 from aiohttp.client import ClientSession, ClientTimeout
 from aries_cloudagent.messaging.models.base_record import BaseRecord
 from .base import BasePDS
@@ -27,12 +27,15 @@ class OCARecord:
             super().__init__(oca_schema_dri, dri)
     """
 
-    def __init__(self, oca_schema_dri=None, dri=None):
+    def __init__(self, oca_schema_dri=None, dri=None, args=None):
         self.oca_schema_dri = oca_schema_dri
         self.dri = dri
+        if args:
+            self.oca_schema_dri = args.get("oca_schema_dri")
+            self.dri = args.get("dri")
 
-    def __repr__(self) -> str:
-        return json.dumps(self.__dict__)
+    # def __repr__(self) -> str:
+    #     return json.dumps(self.__dict__)
 
     def values(self):
         result = self.__dict__.copy()
@@ -334,8 +337,12 @@ async def pds_load_item_recursive_(context, key, value):
     if isinstance(value, dict):
         new_val = await pds_load_dict_recursive(context, value)
     elif key.endswith("_dri") and (not key.endswith("schema_dri")):
-        new_val = await pds_load(context, value)
-        new_val = await pds_load_dict_recursive(context, new_val)
+        try:
+            new_val = await pds_load(context, value)
+            new_val = await pds_load_dict_recursive(context, new_val)
+        except PDSError as err:
+            LOGGER.error("failed to fetch {%s:%s} err:[%s]", key, value, err)
+            new_val = value
     return new_val
 
 
@@ -374,13 +381,83 @@ async def oyd_verify_usage_policy(controller_usage_policy, subject_usage_policy)
         return False, result["message"]
 
 
+async def pds_link_dri(context, dri, link_with_dris):
+    if isinstance(link_with_dris, str):
+        link_with_dris = [link_with_dris]
+    elif isinstance(link_with_dris, list):
+        pass
+    else:
+        raise TypeError("Expected: list or string")
+
+    if __debug__:
+        assert isinstance(link_with_dris, list)
+
+    pds = await pds_get_active(context)
+    if "link" in dir(pds):
+        try:
+            await pds.link(dri, link_with_dris)
+        except PDSError as err:
+            LOGGER.error(
+                "source_dri: %s target_dris: %s error: %s",
+                dri,
+                link_with_dris,
+                err.roll_up,
+            )
+            return False
+    else:
+        LOGGER.warning(
+            "This is an own your data pds extension. current pds doesn't support this method"
+        )
+        return False
+    return True
+
+
+async def __test_pds_link():
+    print("one should fail: invalid dri")
+    print("two should fail: invalid pds")
+    print("----------------------------")
+    context = await build_context()
+    import random
+
+    dri1 = await pds_save(context, "124inmjfa0dioq-0dq" + str(random.random()))
+    dri2 = await pds_save(context, "1asdad24inmjfa0dioq-0dq" + str(random.random()))
+    result = await pds_link_dri(context, dri1, dri2)
+    assert result is True
+
+    result = await pds_link_dri(context, "1wd1fc", "difhd908f")
+    assert result is False
+
+    context = await build_context("local")
+
+    import random
+
+    dri1 = await pds_save(context, "124inmjfa0dioq-0dq" + str(random.random()))
+    dri2 = await pds_save(context, "1asdad24inmjfa0dioq-0dq" + str(random.random()))
+    result = await pds_link_dri(context, dri1, dri2)
+    assert result is False
+
+    result = await pds_link_dri(context, "1wd1fc", "difhd908f")
+    assert result is False
+
+
 async def test_usage_policy():
     usage_pol_1 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
     usage_pol_2 = "<http://w3id.org/semcon/ns/ontology#ContainerPolicy> a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#equivalentClass> [\n    a <http://www.w3.org/2002/07/owl#Class>;\n    <http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasData>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/data#Profile>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasRecipient>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/recipients#Ours>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasPurpose>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/purposes#Health>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasProcessing>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/processing#Aggregate> <http://www.specialprivacy.eu/vocabs/processing#Analyze> <http://www.specialprivacy.eu/vocabs/processing#Collect> <http://www.specialprivacy.eu/vocabs/processing#Copy> <http://www.specialprivacy.eu/vocabs/processing#Move> <http://www.specialprivacy.eu/vocabs/processing#Query> <http://www.specialprivacy.eu/vocabs/processing#Transfer>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasStorage>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#intersectionOf> ([\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasLocation>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> [<http://www.w3.org/2002/07/owl#unionOf> (<http://www.specialprivacy.eu/vocabs/locations#EU>)]\n    ] [\n    a <http://www.w3.org/2002/07/owl#Restriction>;\n    <http://www.w3.org/2002/07/owl#onProperty> <http://www.specialprivacy.eu/langs/usage-policy#hasDuration>;\n    <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.specialprivacy.eu/vocabs/duration#LegalRequirement>\n    ])]\n    ])\n    ] ."
     usage, msg = await oyd_verify_usage_policy(usage_pol_2, usage_pol_1)
     print(msg)
-    assert usage == True
+    assert usage is True
     print(await oyd_verify_usage_policy(usage_pol_1, usage_pol_2))
 
 
-# run_standalone_async(__name__, test_usage_policy)
+def test_oca_record():
+    record = OCARecord("asd90-3g", "amd98asjd")
+    print(json.dumps(record, default=vars))
+
+
+async def test_start():
+    test_oca_record()
+    await __test_pds_link()
+    await test_usage_policy()
+
+
+run_standalone_async(__name__, test_start)

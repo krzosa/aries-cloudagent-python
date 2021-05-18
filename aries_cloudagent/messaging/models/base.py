@@ -3,7 +3,6 @@ import logging
 from abc import ABC
 import json
 from typing import Union
-
 from marshmallow import Schema, post_dump, pre_load, post_load, ValidationError, EXCLUDE
 
 from ...core.error import BaseError
@@ -143,6 +142,20 @@ class BaseModel(ABC):
         schema = self.Schema(unknown=EXCLUDE)
         try:
             return schema.dumps(self) if as_string else schema.dump(self)
+        except ValidationError as e:
+            LOGGER.exception(f"{self.__class__.__name__} message serialization error:")
+            raise BaseModelError(
+                f"{self.__class__.__name__} schema validation failed"
+            ) from e
+
+    async def oca_serialize(self, context):
+        schema = self.Schema(unknown=EXCLUDE)
+        try:
+            dump = schema.dump(self)
+            from aries_cloudagent.pdstorage_thcf.api import pds_load_dict_recursive
+
+            resolved = await pds_load_dict_recursive(context, dump)
+            return resolved
         except ValidationError as e:
             LOGGER.exception(f"{self.__class__.__name__} message serialization error:")
             raise BaseModelError(

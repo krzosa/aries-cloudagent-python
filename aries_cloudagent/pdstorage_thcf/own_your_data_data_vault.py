@@ -201,6 +201,18 @@ class OwnYourDataVault(BasePDS):
 
         return dri_value
 
+    async def link(self, source_dri, with_targets):
+        await self.update_token_when_expired()
+        body = {"source": source_dri, "targets": with_targets}
+        async with ClientSession() as session:
+            url = f"{self.api_url}/api/relation?p=dri"
+            response = await session.post(
+                url,
+                headers={"Authorization": "Bearer " + self.token["access_token"]},
+                json=body,
+            )
+            await unpack_response(response)
+
     async def query_by_oca_schema_dri(self, oca_schema_dri: str = None):
         if __debug__:
             assert_type(oca_schema_dri, str)
@@ -457,13 +469,27 @@ def test_format_2():
     }, result
 
 
+async def test_link(vault: OwnYourDataVault):
+    dri1 = await vault.save({"asd": "test1"}, "test")
+    dri2 = await vault.save({"asd": "test2"}, "test")
+    result = await vault.load(dri1)
+    result = await vault.load(dri2)
+    await vault.link(
+        dri1,
+        [dri2],
+    )
+    await vault.link(
+        dri1,
+        [dri2],
+    )
+
+
 async def test_usage_policy_parse():
     vault = OwnYourDataVault()
-
-    vault.settings["client_id"] = "-s2bdkM_cv7KYDF5xg_Lj6vil1ZJaLQJ79duOW7J9g4"
-    vault.settings["client_secret"] = "s_dR8dzbVES_vvc1-nyb1O_cuzyCz2_bRd3Lr12s4ug"
+    vault.settings["client_id"] = "gVQJTSabNK8DxNzu3PeGWQwBtXSb2Iv7FgYlbzBEbfg"
+    vault.settings["client_secret"] = "9yBmtiyO2YwhtHA9btSrYensVZZ9DLNY1Vq5D-EjxwQ"
     vault.settings["api_url"] = "https://data-vault.eu"
-    await vault.update_token()
+    await test_link(vault)
     test_format()
     test_format_2()
 
