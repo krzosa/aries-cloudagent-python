@@ -148,20 +148,6 @@ class BaseModel(ABC):
                 f"{self.__class__.__name__} schema validation failed"
             ) from e
 
-    async def oca_serialize(self, context):
-        schema = self.Schema(unknown=EXCLUDE)
-        try:
-            dump = schema.dump(self)
-            from aries_cloudagent.pdstorage_thcf.api import pds_load_dict_recursive
-
-            resolved = await pds_load_dict_recursive(context, dump)
-            return resolved
-        except ValidationError as e:
-            LOGGER.exception(f"{self.__class__.__name__} message serialization error:")
-            raise BaseModelError(
-                f"{self.__class__.__name__} schema validation failed"
-            ) from e
-
     def validate(self):
         """Validate a constructed model."""
         schema = self.Schema(unknown=EXCLUDE)

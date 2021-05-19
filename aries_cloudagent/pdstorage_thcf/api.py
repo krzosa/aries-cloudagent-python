@@ -27,15 +27,12 @@ class OCARecord:
             super().__init__(oca_schema_dri, dri)
     """
 
-    def __init__(self, oca_schema_dri=None, dri=None, args=None):
+    def __init__(self, oca_schema_dri=None, dri=None):
         self.oca_schema_dri = oca_schema_dri
         self.dri = dri
-        if args:
-            self.oca_schema_dri = args.get("oca_schema_dri")
-            self.dri = args.get("dri")
 
-    # def __repr__(self) -> str:
-    #     return json.dumps(self.__dict__)
+    def __repr__(self) -> str:
+        return json.dumps(self.__dict__)
 
     def values(self):
         result = self.__dict__.copy()

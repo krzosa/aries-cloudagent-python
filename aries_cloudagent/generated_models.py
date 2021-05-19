@@ -137,6 +137,7 @@ class PDSActivate(OpenAPISchema):
 
 
 class NewApplication(OpenAPISchema):
+    connection_uuid = fields.String(required=True)
     user_data = fields.Dict(keys=fields.String(), values=fields.String(), required=True)
     service_uuid = fields.UUID(required=True)
 
