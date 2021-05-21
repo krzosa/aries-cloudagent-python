@@ -29,7 +29,7 @@ class LocalPDS(BasePDS):
         elif isinstance(record, dict):
             dri_value = encode(json.dumps(record))
         else:
-            raise AssertionError("Invalid type")
+            raise TypeError("record should be of type dict or string")
 
         self.storage[dri_value] = {"oca_schema_dri": oca_schema_dri, "content": record}
 
