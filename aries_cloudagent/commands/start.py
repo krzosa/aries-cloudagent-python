@@ -8,7 +8,6 @@ import signal
 import time
 from argparse import ArgumentParser
 from typing import Coroutine, Sequence
-import cProfile
 
 try:
     import uvloop

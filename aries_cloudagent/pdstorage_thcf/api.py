@@ -1,7 +1,6 @@
 from ..config.global_variables import USAGE_POLICY_VERIFY
 from ..aathcf.utils import build_context, run_standalone_async
 from aiohttp.client import ClientSession, ClientTimeout
-from aries_cloudagent.messaging.models.base_record import BaseRecord
 from .base import BasePDS
 from .error import PDSError, PDSNotFoundError
 from .models.saved_personal_storage import SavedPDS
@@ -15,56 +14,6 @@ import json
 from collections import OrderedDict
 
 LOGGER = logging.getLogger(__name__)
-
-
-class OCARecord:
-    """
-    class DefinedConsent(OCARecord):
-        def __init__(self, label, usage_policy, oca_data, *, oca_schema_dri=None, dri=None):
-            self.label = label
-            self.usage_policy = usage_policy
-            self.oca_data = oca_data
-            super().__init__(oca_schema_dri, dri)
-    """
-
-    def __init__(self, oca_schema_dri=None, dri=None):
-        self.oca_schema_dri = oca_schema_dri
-        self.dri = dri
-
-    def __repr__(self) -> str:
-        return json.dumps(self.__dict__)
-
-    def values(self):
-        result = self.__dict__.copy()
-        result.pop("dri", None)
-        result.pop("oca_schema_dri", None)
-        return result
-
-    def serialize(self):
-        result = self.__dict__.copy()
-
-        to_pop = []
-        for key, value in result.items():
-            if value == None:
-                to_pop.append(key)
-
-        for i in to_pop:
-            result.pop(i, None)
-
-        return result
-
-    async def save(self, context):
-        self.dri = await pds_save(
-            context, self.values(), oca_schema_dri=self.oca_schema_dri
-        )
-        return self.dri
-
-    @classmethod
-    async def load(cls, context, dri):
-        fetch = await pds_load(context, dri, with_meta=True)
-        schema = {"oca_schema_dri": fetch.get("oca_schema_dri"), "dri": dri}
-        schema.update(fetch["content"])
-        return cls(**schema)
 
 
 async def pds_active_get_full_name(context):
@@ -98,7 +47,9 @@ async def pds_get_active(context):
     return pds
 
 
-async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
+async def pds_load(
+    context, id: str, *, with_meta: bool = False, with_meta_embed=False
+) -> dict:
     if __debug__:
         assert_type(id, str)
 
@@ -113,6 +64,14 @@ async def pds_load(context, id: str, *, with_meta: bool = False) -> dict:
         pass
     except KeyError:
         return result
+
+    if with_meta_embed:
+        dri = result.get("dri")
+        oca_schema_dri = result.get("oca_schema_dri")
+        if dri:
+            result["content"]["dri"] = dri
+        if oca_schema_dri:
+            result["content"]["oca_schema_dri"] = oca_schema_dri
 
     if with_meta:
         return result
@@ -152,6 +111,7 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
 async def pds_query_model_by_oca_schema_dri(context, oca_schema_dri):
     if __debug__:
         assert isinstance(oca_schema_dri, str)
+        assert oca_schema_dri != ""
 
     pds = await pds_get_active(context)
 
@@ -446,13 +406,7 @@ async def test_usage_policy():
     print(await oyd_verify_usage_policy(usage_pol_1, usage_pol_2))
 
 
-def test_oca_record():
-    record = OCARecord("asd90-3g", "amd98asjd")
-    print(json.dumps(record, default=vars))
-
-
 async def test_start():
-    test_oca_record()
     await __test_pds_link()
     await test_usage_policy()
 

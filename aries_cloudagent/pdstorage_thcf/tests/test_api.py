@@ -1,4 +1,3 @@
-from aries_cloudagent.pdstorage_thcf.api import OCARecord
 from asynctest import TestCase as AsyncTestCase
 import aries_cloudagent.pdstorage_thcf.api as api
 from aries_cloudagent.messaging.models.base_record import BaseRecord
@@ -44,22 +43,6 @@ class TestPDSApi(AsyncTestCase):
             "state": "1234-state",
         }
         self.acapy_record = _TestBaseRecord(**self.acapy_record_dict)
-
-    async def test_pds_record(self):
-        class Inherit(OCARecord):
-            def __init__(self, test, *, oca_schema_dri=None, dri=None):
-                self.test = test
-                super().__init__(oca_schema_dri, dri)
-
-        inherit = Inherit("asd", oca_schema_dri="123", dri="123")
-        assert inherit.serialize() == {
-            "test": "asd",
-            "dri": "123",
-            "oca_schema_dri": "123",
-        }
-        assert inherit.values() == {"test": "asd"}
-        inherit = Inherit("asd", oca_schema_dri="123")
-        assert inherit.serialize() == {"test": "asd", "oca_schema_dri": "123"}
 
     async def test_pds_load_recursive(self):
         payload_dri_1234 = {
