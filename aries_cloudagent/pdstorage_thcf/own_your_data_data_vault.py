@@ -221,7 +221,7 @@ class OwnYourDataVault(BasePDS):
         url = f"{self.api_url}/api/data"
         parameter_count = 0
 
-        url = url + f"?table=dip.data.{oca_schema_dri}"
+        url = url + f"?table=dip.data.{OYD_OCA_CHUNKS_PREFIX}{oca_schema_dri}"
         parameter_count += 1
 
         url = url + "&f=plain"
