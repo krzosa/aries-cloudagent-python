@@ -19,7 +19,10 @@ from aries_cloudagent.pdstorage_thcf.api import (
     pds_load,
     pds_save,
 )
-from aries_cloudagent.pdstorage_thcf.error import PDSNotFoundError
+from aries_cloudagent.pdstorage_thcf.error import (
+    PDSNotFoundError,
+    PDSRecordNotFoundError,
+)
 
 CREDENTIALS_TABLE = "credentials"
 
@@ -41,7 +44,7 @@ class PDSHolder(BaseHolder):
         """
         try:
             credential = await pds_load(self.context, credential_id)
-        except PDSNotFoundError as err:
+        except PDSRecordNotFoundError as err:
             raise HolderError(err.roll_up)
 
         credential = json.dumps(credential)

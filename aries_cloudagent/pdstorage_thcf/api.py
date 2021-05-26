@@ -108,24 +108,6 @@ async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
     return payload_id
 
 
-async def pds_query_model_by_oca_schema_dri(context, oca_schema_dri):
-    if __debug__:
-        assert isinstance(oca_schema_dri, str)
-        assert oca_schema_dri != ""
-
-    pds = await pds_get_active(context)
-
-    response = await pds.query_by_oca_schema_dri(oca_schema_dri)
-    result = []
-    for i in response:
-        content = i["content"]
-        assert content.get("dri") is None
-        content["dri"] = i["dri"]
-        result.append(content)
-
-    return result
-
-
 async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
     if __debug__:
         assert_type_or(oca_schema_dri, str, list)

@@ -238,11 +238,8 @@ class ArrayOfOCASchemaChunks(OCASchemaChunk):
 
 
 
-class OCASchemaChunkPayloadItem(AdditionalPropertiesSchema):
-
-    class Meta:
-        additional_field = fields.String()
-
+class OCASchemaChunkPayloadItem(OpenAPISchema):
+    pass
 
 
 class OCASchemaChunkPayload(OCASchemaChunkPayloadItem):
