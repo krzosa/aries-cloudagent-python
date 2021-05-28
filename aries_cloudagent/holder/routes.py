@@ -1,9 +1,12 @@
 """Holder admin routes."""
 
+from aries_cloudagent.aathcf.utils import build_context, run_standalone_async
+import aries_cloudagent.config.global_variables as globals
+from aries_cloudagent.pdstorage_thcf.api import pds_query_by_oca_schema_dri
 import json
 
 from aiohttp import web
-from aiohttp_apispec import docs, match_info_schema, querystring_schema, response_schema
+from aiohttp_apispec import docs, match_info_schema, response_schema
 from marshmallow import fields
 
 from .base import BaseHolder, HolderError
@@ -12,13 +15,9 @@ from ..messaging.valid import (
     INDY_CRED_DEF_ID,
     INDY_REV_REG_ID,
     INDY_SCHEMA_ID,
-    INDY_WQL,
-    NATURAL_NUM,
-    WHOLE_NUM,
     UUIDFour,
 )
 from ..wallet.error import WalletNotFoundError
-from collections import OrderedDict
 
 
 class AttributeMimeTypesResultSchema(OpenAPISchema):
@@ -163,94 +162,45 @@ async def credentials_remove(request: web.BaseRequest):
     return web.json_response({})
 
 
+async def documents_given_get(context):
+    result = []
+    for i in globals.CREDENTIALS_GIVEN_DRIS:
+        credentials = await pds_query_by_oca_schema_dri(context, i)
+        for j in credentials:
+            result.extend(j["payload"])
+
+    return result
+
+
+async def documents_mine_get(context):
+    docs = await pds_query_by_oca_schema_dri(context, globals.CREDENTIALS_TABLE)
+    result = []
+    for i in docs:
+        result.extend(i["payload"])
+    return result
+
+
 @docs(
     tags=["credentials"],
     summary="Fetch credentials from wallet",
 )
 async def credentials_list(request: web.BaseRequest):
-    """
-    Request handler for searching credential records.
-
-    Args:
-        request: aiohttp request object
-
-    Returns:
-        The credential list response
-
-    """
     context = request.app["request_context"]
-
-    holder: BaseHolder = await context.inject(BaseHolder)
-    try:
-        credentials = await holder.get_credentials()
-    except HolderError as err:
-        raise web.HTTPBadRequest(reason=err.roll_up) from err
-
-    return web.json_response({"success": True, "result": credentials})
+    docs = await documents_mine_get(context)
+    return web.json_response(docs)
 
 
-class IndyCredentialsListQueryStringSchema(OpenAPISchema):
-    """Parameters and validators for query string in credentials list query."""
-
-    start = fields.Int(
-        description="Start index",
-        required=False,
-        **WHOLE_NUM,
-    )
-    count = fields.Int(
-        description="Maximum number to retrieve",
-        required=False,
-        **NATURAL_NUM,
-    )
-    wql = fields.Str(
-        description="(JSON) WQL query",
-        required=False,
-        **INDY_WQL,
-    )
-
-
-# @docs(
-#     tags=["credentials"],
-#     summary="Fetch credentials from wallet",
-# )
-# @querystring_schema(IndyCredentialsListQueryStringSchema())
-# @response_schema(CredentialsListSchema(), 200)
-async def indy_credentials_list(request: web.BaseRequest):
-    """
-    Request handler for searching credential records.
-
-    Args:
-        request: aiohttp request object
-
-    Returns:
-        The credential list response
-
-    """
+@docs(
+    tags=["credentials"],
+    summary="Fetch given documents",
+)
+async def credentials_list_given(request: web.BaseRequest):
     context = request.app["request_context"]
-
-    start = request.query.get("start")
-    count = request.query.get("count")
-
-    # url encoded json wql
-    encoded_wql = request.query.get("wql") or "{}"
-    wql = json.loads(encoded_wql)
-
-    # defaults
-    start = int(start) if isinstance(start, str) else 0
-    count = int(count) if isinstance(count, str) else 10
-
-    holder: BaseHolder = await context.inject(BaseHolder)
-    try:
-        credentials = await holder.get_credentials(start, count, wql)
-    except HolderError as err:
-        raise web.HTTPBadRequest(reason=err.roll_up) from err
-
-    return web.json_response({"results": credentials})
+    result = await documents_given_get(context)
+    return web.json_response(result)
 
 
 async def register(app: web.Application):
-    """Register routes."""
-
     app.add_routes(
         [
             web.get("/credential/{credential_id}", credentials_get, allow_head=False),
@@ -261,6 +211,8 @@ async def register(app: web.Application):
             ),
             web.post("/credential/{credential_id}/remove", credentials_remove),
             web.get("/credentials", credentials_list, allow_head=False),
+            web.get("/documents/mine", credentials_list, allow_head=False),
+            web.get("/documents/given", credentials_list_given, allow_head=False),
         ]
     )
 
@@ -281,3 +233,17 @@ def post_process_routes(app: web.Application):
             },
         }
     )
+
+
+async def test_credentials_list_given():
+    context = await build_context()
+    credentials_list = await documents_given_get(context)
+    credentials_list = await documents_mine_get(context)
+    print(credentials_list)
+
+
+async def tests():
+    await test_credentials_list_given()
+
+
+run_standalone_async(__name__, tests)

@@ -1,5 +1,6 @@
 """Aries#0037 v1.0 presentation exchange information with non-secrets storage."""
 
+import aries_cloudagent.config.global_variables as globals
 from typing import Any
 
 from marshmallow import fields, validate
@@ -144,7 +145,7 @@ class THCFPresentationExchange(BaseExchangeRecord):
         return super().__eq__(other)
 
     async def verifier_ack_cred_pds_set(self, context, credential: OrderedDict):
-        dri = await pds_save(context, credential, "Acknowledgment")
+        dri = await pds_save(context, credential, globals.ACKS_GIVEN_DRI)
         self.acknowledgment_credential_dri = dri
 
     async def ack_cred_pds_get(self, context):
@@ -153,7 +154,9 @@ class THCFPresentationExchange(BaseExchangeRecord):
         return credential
 
     async def presentation_pds_set(self, context, presentation):
-        self.presentation_dri = await pds_save(context, presentation, "Presentation")
+        self.presentation_dri = await pds_save(
+            context, presentation, globals.PRESENTATION_GIVEN_DRI
+        )
 
     async def presentation_pds_get(self, context):
         if self.presentation_dri is None:

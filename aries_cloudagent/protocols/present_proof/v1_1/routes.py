@@ -1,5 +1,6 @@
 """Admin routes for presentations."""
 
+from aries_cloudagent.config.global_variables import CREDENTIALS_TABLE
 import json
 
 from aiohttp import web
@@ -23,7 +24,6 @@ from aries_cloudagent.pdstorage_thcf.api import (
     pds_get_usage_policy_if_active_pds_supports_it,
     pds_query_by_oca_schema_dri,
 )
-from aries_cloudagent.holder.pds import CREDENTIALS_TABLE
 from aries_cloudagent.pdstorage_thcf.error import PDSError
 from aries_cloudagent.protocols.issue_credential.v1_1.routes import (
     routes_get_public_did,

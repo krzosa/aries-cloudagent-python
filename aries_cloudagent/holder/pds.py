@@ -1,3 +1,4 @@
+from aries_cloudagent.config.global_variables import CREDENTIALS_TABLE
 import json
 import logging
 import uuid
@@ -24,7 +25,6 @@ from aries_cloudagent.pdstorage_thcf.error import (
     PDSRecordNotFoundError,
 )
 
-CREDENTIALS_TABLE = "credentials"
 
 # TODO: Better error handling
 class PDSHolder(BaseHolder):
