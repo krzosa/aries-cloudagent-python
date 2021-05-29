@@ -79,12 +79,7 @@ def validate_schema(SchemaClass, schema: dict, exception=None, log=print):
 
     errors = test_against.validate(test_schema)
     if errors != {}:
-        log(
-            f"Exception {exception}\n"
-            f"Invalid Schema! errors: {errors}\n"
-            f"schema: {test_schema}\n"
-            f"SchemaClass: {SchemaClass}\n"
-        )
+        log(f"schema validation error: {errors}\n")
 
         if exception is not None:
             raise exception(f"Invalid Schema! errors: {errors}")
