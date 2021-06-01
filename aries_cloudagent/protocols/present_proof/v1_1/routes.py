@@ -117,37 +117,13 @@ async def request_presentation_route(request: web.BaseRequest):
     return web.json_response({})
 
 
-@docs(tags=["present-proof"], summary="Send a credential presentation")
-@request_schema(PresentProofAPISchema())
-async def present_proof_api(request: web.BaseRequest):
-    """
-    Allows to respond to an already existing exchange with a proof presentation.
-
-    Args:
-        request: aiohttp request object
-
-    Returns:
-        The presentation exchange details
-
-    """
-    context = request.app["request_context"]
-    outbound_handler = request.app["outbound_message_router"]
-
-    body = await request.json()
-    exchange_record_id = body.get("exchange_record_id")
-    credential_id = body.get("credential_id")
-
+async def present_proof(context, exchange_record_id, credential_id):
     exchange = await retrieve_exchange(context, exchange_record_id, web.HTTPNotFound)
-
     if exchange.role != exchange.ROLE_PROVER:
         raise web.HTTPBadRequest(reason="Invalid exchange role")
     if exchange.state != exchange.STATE_REQUEST_RECEIVED:
         raise web.HTTPBadRequest(reason="Invalid exchange state")
-
-    connection_record: ConnectionRecord = await retrieve_connection(
-        context, exchange.connection_id
-    )
-
+    await retrieve_connection(context, exchange.connection_id)
     try:
         holder: BaseHolder = await context.inject(BaseHolder)
         requested_credentials = {"credential_id": credential_id}
@@ -159,17 +135,31 @@ async def present_proof_api(request: web.BaseRequest):
         )
     except HolderError as err:
         raise web.HTTPInternalServerError(reason=err.roll_up)
-
     public_did = await routes_get_public_did(context)
     message = PresentProof(
         credential_presentation=presentation, prover_public_did=public_did
     )
     message.assign_thread_id(exchange.thread_id)
-    await outbound_handler(message, connection_id=connection_record.connection_id)
+    return message, presentation, exchange
 
+
+async def present_proof_save(context, exchange, presentation):
     exchange.state = exchange.STATE_PRESENTATION_SENT
     await exchange.presentation_pds_set(context, json.loads(presentation))
     await exchange.save(context)
+
+
+@docs(tags=["present-proof"], summary="Send a credential presentation")
+@request_schema(PresentProofAPISchema())
+async def present_proof_api(request: web.BaseRequest):
+    context = request.app["request_context"]
+    outbound_handler = request.app["outbound_message_router"]
+    body = await request.json()
+    message, presentation, exchange = await present_proof(
+        context, body.get("exchange_record_id"), body.get("credential_id")
+    )
+    await outbound_handler(message, connection_id=exchange.connection_id)
+    await present_proof_save(context, exchange, presentation)
 
     return web.json_response(
         {

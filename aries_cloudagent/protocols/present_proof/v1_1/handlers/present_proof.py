@@ -17,31 +17,39 @@ import json
 from collections import OrderedDict
 
 
-class PresentProofHandler(BaseHandler):
-    """
-    Message handler logic for incoming credential presentations / incoming proofs.
-    """
+async def handle_proof_presentation(context, connection_id, thread_id, presentation):
+    verifier: BaseVerifier = await context.inject(BaseVerifier)
 
-    async def handle(self, context: RequestContext, responder: BaseResponder):
-        debug_handler(self._logger.info, context, PresentProof)
-        verifier: BaseVerifier = await context.inject(BaseVerifier)
-
+    request_accepted = True
+    if presentation is None:
+        request_accepted = False
+    elif isinstance(presentation, str):
         presentation = json.loads(
             context.message.credential_presentation, object_pairs_hook=OrderedDict
         )
-
-        exchange: THCFPresentationExchange = await retrieve_exchange_by_thread(
-            context,
-            responder.connection_id,
-            context.message._thread_id,
-            HandlerException,
+    elif isinstance(presentation, OrderedDict):
+        pass
+    else:
+        raise TypeError(
+            "Invalid type should be str, OrderedDict or None but is of type",
+            type(presentation),
         )
 
-        if exchange.role != exchange.ROLE_VERIFIER:
-            raise HandlerException(reason="Invalid exchange role")
-        if exchange.state != exchange.STATE_REQUEST_SENT:
-            raise HandlerException(reason="Invalid exchange state")
+    exchange: THCFPresentationExchange = await retrieve_exchange_by_thread(
+        context,
+        connection_id,
+        thread_id,
+        HandlerException,
+    )
 
+    if exchange.role != exchange.ROLE_VERIFIER:
+        raise HandlerException(reason="Invalid exchange role")
+    if exchange.state != exchange.STATE_REQUEST_SENT:
+        raise HandlerException(reason="Invalid exchange state")
+
+    if request_accepted:
+        exchange.state = exchange.STATE_REQUEST_DENIED
+    else:
         is_verified = await verifier.verify_presentation(
             presentation_request=exchange.presentation_request,
             presentation=presentation,
@@ -50,17 +58,25 @@ class PresentProofHandler(BaseHandler):
             rev_reg_defs={},
             rev_reg_entries={},
         )
-
         if not is_verified:
             raise HandlerException(
                 f"Verifier couldn't verify the presentation! {is_verified}"
             )
-
         await exchange.presentation_pds_set(context, presentation)
         exchange.verified = True
         exchange.prover_public_did = context.message.prover_public_did
         exchange.state = exchange.STATE_PRESENTATION_RECEIVED
-        await exchange.save(context, reason="PresentationExchange updated!")
+
+    await exchange.save(context, reason="PresentationExchange updated!")
+    return exchange
+
+
+class PresentProofHandler(BaseHandler):
+    async def handle(self, context: RequestContext, responder: BaseResponder):
+        debug_handler(self._logger.info, context, PresentProof)
+        exchange = await handle_proof_presentation(
+            context, responder.connection_id, context.message._thread_id
+        )
 
         await responder.send_webhook(
             "present_proof",
