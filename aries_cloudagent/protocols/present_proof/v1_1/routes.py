@@ -1,5 +1,15 @@
 """Admin routes for presentations."""
 
+from aiohttp_apispec.decorators import response
+from aiohttp_apispec.decorators.response import response_schema
+from aries_cloudagent.aathcf.utils import (
+    add_connection,
+    build_context,
+    build_request_stub,
+    call_endpoint_validate,
+    run_standalone_async,
+)
+import aries_cloudagent.generated_models as Model
 from aries_cloudagent.config.global_variables import CREDENTIALS_TABLE
 import json
 
@@ -37,8 +47,8 @@ LOGGER = logging.getLogger(__name__)
 class PresentationRequestAPISchema(OpenAPISchema):
     connection_id = fields.Str(required=True)
     requested_attributes = fields.List(fields.Str(required=True), required=True)
-    issuer_did = fields.Str(required=False)
-    schema_base_dri = fields.Str(required=True)
+    issuer_did = fields.Str(required=False)  # Requested issuer did
+    oca_schema_dri = fields.Str(required=True)
 
 
 class PresentProofAPISchema(OpenAPISchema):
@@ -59,21 +69,22 @@ class AcknowledgeProofSchema(OpenAPISchema):
     status = fields.Boolean(required=True)
 
 
-@docs(tags=["present-proof"], summary="Sends a proof presentation")
-@request_schema(PresentationRequestAPISchema())
-async def request_presentation_api(request: web.BaseRequest):
-    """Request handler for sending a presentation."""
+class Empty(OpenAPISchema):
+    pass
+
+
+@docs(tags=["present-proof"], summary="Send a presentation request to other agent")
+@request_schema(Model.PresentationRequest)
+@response_schema(Empty)
+async def request_presentation_route(request: web.BaseRequest):
     context = request.app["request_context"]
     outbound_handler = request.app["outbound_message_router"]
     body = await request.json()
-
     connection_id = body.get("connection_id")
+    oca_schema_dri = body.get("oca_schema_dri")
     await retrieve_connection(context, connection_id)
 
-    presentation_request = {
-        "requested_attributes": body.get("requested_attributes"),
-        "schema_base_dri": body.get("schema_base_dri"),
-    }
+    presentation_request = {"oca_schema_dri": oca_schema_dri}
     issuer_did = body.get("issuer_did")
     if issuer_did is not None:
         presentation_request["issuer_did"] = issuer_did
@@ -96,15 +107,7 @@ async def request_presentation_api(request: web.BaseRequest):
     LOGGER.debug("exchange_record %s", exchange_record)
     await exchange_record.save(context)
 
-    return web.json_response(
-        {
-            "success": True,
-            "message": "proof sent and exchange updated",
-            "exchange_id": exchange_record._id,
-            "thread_id": message._thread_id,
-            "connection_id": connection_id,
-        }
-    )
+    return web.json_response({})
 
 
 @docs(tags=["present-proof"], summary="Send a credential presentation")
@@ -276,7 +279,7 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
             print("Cred content:", cred_content)
 
             record_base_dri = rec["presentation_request"].get(
-                "schema_base_dri", "INVALIDA"
+                "oca_schema_dri", "INVALIDA"
             )
             cred_base_dri = cred_content["credentialSubject"].get(
                 "oca_schema_dri", "INVALIDC"
@@ -287,14 +290,44 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
     return web.json_response({"success": True, "result": result})
 
 
+async def accept_presentation_request_route(request: web.BaseRequest):
+    pass
+
+
+async def reject_presentation_request_route(request: web.BaseRequest):
+    pass
+
+
+async def accept_presentation_route(request: web.BaseRequest):
+    pass
+
+
+async def reject_presentation_route(request: web.BaseRequest):
+    pass
+
+
 async def register(app: web.Application):
     """Register routes."""
 
     app.add_routes(
         [
             web.post(
-                "/present-proof/request",
-                request_presentation_api,
+                "/presentation-requests",
+                request_presentation_route,
+            ),
+            web.put(
+                "/presentation-requests/{presentation_request_id}/reject",
+                reject_presentation_request_route,
+            ),
+            web.put(
+                "/presentation-requests/{presentation_request_id}/accept",
+                accept_presentation_request_route,
+            ),
+            web.put(
+                "/presentations/{presentation_id}/reject", reject_presentation_route
+            ),
+            web.put(
+                "/presentations/{presentation_id}/accept", accept_presentation_route
             ),
             web.post(
                 "/present-proof/present",

@@ -1,4 +1,4 @@
-from ..config.global_variables import OYD_OCA_CHUNKS_PREFIX, USAGE_POLICY_PARSE
+from ..config.global_variables import USAGE_POLICY_PARSE
 from ..aathcf.utils import run_standalone_async
 from .base import BasePDS
 from .api import encode
@@ -170,7 +170,7 @@ class OwnYourDataVault(BasePDS):
         table = self.settings.get("repo", "dip.data")
         if oca_schema_dri is not None:
             assert_type(oca_schema_dri, str)
-            table += "." + OYD_OCA_CHUNKS_PREFIX + oca_schema_dri
+            table += "." + oca_schema_dri
 
         dri_value = None
         if isinstance(record, str):
@@ -221,7 +221,7 @@ class OwnYourDataVault(BasePDS):
         url = f"{self.api_url}/api/data"
         parameter_count = 0
 
-        url = url + f"?table=dip.data.{OYD_OCA_CHUNKS_PREFIX}{oca_schema_dri}"
+        url = url + f"?table=dip.data.{oca_schema_dri}"
         parameter_count += 1
 
         url = url + "&f=plain"

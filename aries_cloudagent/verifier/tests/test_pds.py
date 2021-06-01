@@ -98,7 +98,7 @@ pres = OrderedDict(
 
 
 pres_request = {
-    "schema_base_dri": "1234",
+    "oca_schema_dri": "1234",
     "requested_attributes": ["test"],
 }
 

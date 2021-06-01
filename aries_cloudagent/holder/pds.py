@@ -18,6 +18,7 @@ from aries_cloudagent.aathcf.credentials import (
 from .base import BaseHolder, HolderError
 from aries_cloudagent.pdstorage_thcf.api import (
     pds_load,
+    pds_query_by_oca_schema_dri,
     pds_save,
 )
 from aries_cloudagent.pdstorage_thcf.error import (
@@ -247,7 +248,6 @@ class PDSHolder(BaseHolder):
             raise HolderError("Proof is incorrect, could not verify")
 
         try:
-            # TODO: oca_schema_dri as table
             record_id = await pds_save(
                 self.context,
                 credential_data,
@@ -258,8 +258,8 @@ class PDSHolder(BaseHolder):
         return record_id
 
     async def get_credentials(self) -> list:
-
-        return ["Not implemented"]
+        creds = await pds_query_by_oca_schema_dri(self.context, CREDENTIALS_TABLE)
+        return creds
 
     async def create_revocation_state(
         self,

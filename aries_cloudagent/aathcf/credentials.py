@@ -208,7 +208,7 @@ class PresentationRequestedAttributesSchema(Schema):
 class PresentationRequestSchema(Schema):
     requested_attributes = fields.List(fields.Str(required=True), required=True)
     issuer_did = fields.Str(required=False)
-    schema_base_dri = fields.Str(required=True)
+    oca_schema_dri = fields.Str(required=True)
 
 
 # TODO: JWT

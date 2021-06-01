@@ -4,8 +4,6 @@ from aries_cloudagent.connections.models.connection_record import ConnectionReco
 from aries_cloudagent.protocols.issue_credential.v1_1.models.credential_exchange import (
     CredentialExchangeRecord,
 )
-from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
-from aries_cloudagent.aathcf.credentials import assert_type
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -53,4 +51,3 @@ async def retrieve_credential_exchange(context, credential_exchange_id):
         raise web.HTTPInternalServerError(reason=err.roll_up)
 
     return exchange_record
-

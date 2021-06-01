@@ -24,7 +24,7 @@ from aries_cloudagent.pdstorage_thcf.models.saved_personal_storage import (
 )
 
 presentation_request = {
-    "schema_base_dri": "12345",
+    "oca_schema_dri": "12345",
     "requested_attributes": ["first_name"],
 }
 

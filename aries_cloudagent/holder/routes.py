@@ -162,21 +162,22 @@ async def credentials_remove(request: web.BaseRequest):
     return web.json_response({})
 
 
-async def documents_given_get(context):
+async def documents_get(context, dri_list):
     result = []
-    for i in globals.CREDENTIALS_GIVEN_DRIS:
+    for i in dri_list:
         credentials = await pds_query_by_oca_schema_dri(context, i)
         for j in credentials:
             result.extend(j["payload"])
+    return result
 
+
+async def documents_given_get(context):
+    result = await documents_get(context, globals.DOCUMENTS_GIVEN)
     return result
 
 
 async def documents_mine_get(context):
-    docs = await pds_query_by_oca_schema_dri(context, globals.CREDENTIALS_TABLE)
-    result = []
-    for i in docs:
-        result.extend(i["payload"])
+    result = await documents_get(context, globals.DOCUMENTS_MINE)
     return result
 
 

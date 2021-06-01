@@ -8,14 +8,20 @@ REGISTERED_PDS = {
         "own_your_data_data_vault": "aries_cloudagent.pdstorage_thcf.own_your_data_data_vault.OwnYourDataVault",
     }
 }
-CREDENTIALS_TABLE = "credentials"
-CONSENT_MINE_DRI = "oca_schema_dri_consent_mine"  # TODO: What is consent mine??
-CONSENT_FROM_APPLICANT_DRI = "consent_from_applicant"
 CONSENT_DRI = "consent_dri"
+
+
+CREDENTIALS_TABLE = "credentials"
+CONSENT_FROM_APPLICANT_DRI = "consent_from_applicant"
+DOCUMENTS_MINE = [CREDENTIALS_TABLE, CONSENT_FROM_APPLICANT_DRI]
 
 CREDENTIALS_GIVEN_DRI = "credentials_given"
 CONSENT_GIVEN_DRI = "oca_schema_dri_consent_given"
 ACKS_GIVEN_DRI = "ack"
 PRESENTATION_GIVEN_DRI = "presentation_given"
-
-CREDENTIALS_GIVEN_DRIS = [CONSENT_GIVEN_DRI, CREDENTIALS_GIVEN_DRI, ACKS_GIVEN_DRI]
+DOCUMENTS_GIVEN = [
+    CONSENT_GIVEN_DRI,
+    CREDENTIALS_GIVEN_DRI,
+    ACKS_GIVEN_DRI,
+    PRESENTATION_GIVEN_DRI,
+]

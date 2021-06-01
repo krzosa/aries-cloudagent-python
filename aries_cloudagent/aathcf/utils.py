@@ -1,8 +1,10 @@
+from aries_cloudagent.connections.models.connection_record import ConnectionRecord
 from aries_cloudagent.pdstorage_thcf.models.saved_personal_storage import SavedPDS
 from aries_cloudagent.config.global_variables import REGISTERED_PDS
 from aries_cloudagent.config.settings import Settings
 from aries_cloudagent.config.default_context import DefaultContextBuilder
 from aries_cloudagent.messaging.base_handler import HandlerException
+from aries_cloudagent.wallet.base import BaseWallet
 import json
 
 
@@ -33,8 +35,8 @@ async def build_context(pds_type="own_your_data_data_vault", connection_record={
 
     if pds_type == "own_your_data_data_vault":
 
-        pds.settings["client_id"] = "-s2bdkM_cv7KYDF5xg_Lj6vil1ZJaLQJ79duOW7J9g4"
-        pds.settings["client_secret"] = "s_dR8dzbVES_vvc1-nyb1O_cuzyCz2_bRd3Lr12s4ug"
+        pds.settings["client_id"] = "nM8p2yYuxqGWvbJ50t8ODifjyFZfi-yOm2HoE6AZaW0"
+        pds.settings["client_secret"] = "X6WBjmMylTQ3BdbBRKkBir3uVz79RgADetw5tl7Tgyo"
         pds.settings["api_url"] = "https://data-vault.eu"
 
     return context
@@ -80,6 +82,18 @@ async def call_endpoint_validate(function, request):
     result = await function(request)
     validate_endpoint_output(function, result)
     return result
+
+
+async def add_connection(context):
+    result = ConnectionRecord()
+    result.state = result.STATE_ACTIVE
+    await result.save(context)
+    return result
+
+
+async def create_public_did(context):
+    wallet: BaseWallet = await context.inject(BaseWallet)
+    await wallet.create_public_did()
 
 
 def debug_handler(log, context, MessageClass):
