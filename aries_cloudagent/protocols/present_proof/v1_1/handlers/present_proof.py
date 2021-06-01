@@ -17,7 +17,6 @@ import json
 from collections import OrderedDict
 
 
-# TODO Error handling
 class PresentProofHandler(BaseHandler):
     """
     Message handler logic for incoming credential presentations / incoming proofs.

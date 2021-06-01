@@ -1,5 +1,7 @@
 """Admin routes for presentations."""
 
+from uuid import uuid4
+import uuid
 from aiohttp_apispec.decorators import response
 from aiohttp_apispec.decorators.response import response_schema
 from aries_cloudagent.aathcf.utils import (
@@ -73,19 +75,9 @@ class Empty(OpenAPISchema):
     pass
 
 
-@docs(tags=["present-proof"], summary="Send a presentation request to other agent")
-@request_schema(Model.PresentationRequest)
-@response_schema(Empty)
-async def request_presentation_route(request: web.BaseRequest):
-    context = request.app["request_context"]
-    outbound_handler = request.app["outbound_message_router"]
-    body = await request.json()
-    connection_id = body.get("connection_id")
-    oca_schema_dri = body.get("oca_schema_dri")
+async def request_presentation(context, connection_id, oca_schema_dri, issuer_did=None):
     await retrieve_connection(context, connection_id)
-
     presentation_request = {"oca_schema_dri": oca_schema_dri}
-    issuer_did = body.get("issuer_did")
     if issuer_did is not None:
         presentation_request["issuer_did"] = issuer_did
 
@@ -93,7 +85,7 @@ async def request_presentation_route(request: web.BaseRequest):
     message = RequestProof(
         presentation_request=presentation_request, usage_policy=usage_policy
     )
-    await outbound_handler(message, connection_id=connection_id)
+    message.assign_thread_id(str(uuid4()))
 
     exchange_record = THCFPresentationExchange(
         connection_id=connection_id,
@@ -103,10 +95,25 @@ async def request_presentation_route(request: web.BaseRequest):
         state=THCFPresentationExchange.STATE_REQUEST_SENT,
         presentation_request=presentation_request,
     )
-
-    LOGGER.debug("exchange_record %s", exchange_record)
     await exchange_record.save(context)
 
+    return message, exchange_record
+
+
+@docs(tags=["present-proof"], summary="Send a presentation request to other agent")
+@request_schema(Model.PresentationRequest)
+@response_schema(Empty)
+async def request_presentation_route(request: web.BaseRequest):
+    context = request.app["request_context"]
+    outbound_handler = request.app["outbound_message_router"]
+    body = await request.json()
+    message, exchange_record = await request_presentation(
+        context,
+        body.get("connection_id"),
+        body.get("oca_schema_dri"),
+        body.get("issuer_did"),
+    )
+    await outbound_handler(message, connection_id=exchange_record.connection_id)
     return web.json_response({})
 
 
