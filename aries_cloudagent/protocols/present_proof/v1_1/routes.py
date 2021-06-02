@@ -1,17 +1,7 @@
 """Admin routes for presentations."""
 
-from aries_cloudagent.protocols.present_proof.v1_1.handlers import request_proof
 from uuid import uuid4
-import uuid
-from aiohttp_apispec.decorators import response
 from aiohttp_apispec.decorators.response import response_schema
-from aries_cloudagent.aathcf.utils import (
-    add_connection,
-    build_context,
-    build_request_stub,
-    call_endpoint_validate,
-    run_standalone_async,
-)
 import aries_cloudagent.generated_models as Model
 from aries_cloudagent.config.global_variables import CREDENTIALS_TABLE
 import json
@@ -23,7 +13,6 @@ from aiohttp_apispec import (
     request_schema,
 )
 from marshmallow import fields
-from ....connections.models.connection_record import ConnectionRecord
 from ....holder.base import BaseHolder, HolderError
 from .models.presentation_exchange import THCFPresentationExchange
 from ....messaging.models.openapi import OpenAPISchema
@@ -43,6 +32,7 @@ from aries_cloudagent.protocols.issue_credential.v1_1.routes import (
 )
 from aries_cloudagent.issuer.base import BaseIssuer, IssuerError
 from .messages.acknowledge_proof import AcknowledgeProof
+import aries_cloudagent.config.global_variables as globals
 
 LOGGER = logging.getLogger(__name__)
 
@@ -156,13 +146,7 @@ async def present_proof_save(context, exchange, presentation):
     await exchange.save(context)
 
 
-class DocumentDRI(OpenAPISchema):
-    document_dri = fields.Str(required=False)
-
-
-@docs(tags=["present-proof"], summary="Send a credential presentation")
-@request_schema(DocumentDRI())
-async def accept_presentation_request_route(request: web.BaseRequest):
+async def presentation_request(request):
     context = request.app["request_context"]
     outbound_handler = request.app["outbound_message_router"]
     body = await request.json()
@@ -172,43 +156,31 @@ async def accept_presentation_request_route(request: web.BaseRequest):
     await outbound_handler(message, connection_id=exchange.connection_id)
     await present_proof_save(context, exchange, presentation)
 
-    return web.json_response(
-        {
-            "success": True,
-            "message": "proof sent and exchange updated",
-            "exchange_id": exchange._id,
-        }
-    )
+    return web.json_response()
+
+
+class DocumentDRI(OpenAPISchema):
+    document_dri = fields.Str(required=False)
 
 
 @docs(tags=["present-proof"], summary="Send a credential presentation")
+@request_schema(DocumentDRI())
+@response_schema(Empty)
+async def accept_presentation_request_route(request: web.BaseRequest):
+    result = await presentation_request(request)
+    return result
+
+
+@docs(tags=["present-proof"], summary="Send a credential presentation")
+@response_schema(Empty)
 async def reject_presentation_request_route(request: web.BaseRequest):
-    context = request.app["request_context"]
-    outbound_handler = request.app["outbound_message_router"]
-    message, presentation, exchange = await present_proof(
-        context, request.match_info["presentation_request_id"], None
-    )
-    await outbound_handler(message, connection_id=exchange.connection_id)
-    await present_proof_save(context, exchange, presentation)
-
-    return web.json_response(
-        {
-            "success": True,
-            "message": "proof sent and exchange updated",
-            "exchange_id": exchange._id,
-        }
-    )
+    result = await presentation_request(request)
+    return result
 
 
-@docs(tags=["present-proof"], summary="retrieve exchange record")
-@querystring_schema(AcknowledgeProofSchema())
-async def acknowledge_proof(request: web.BaseRequest):
-    context = request.app["request_context"]
-    outbound_handler = request.app["outbound_message_router"]
-    query = request.query
-
+async def process_presentation(context, exchange_record_id, accept):
     exchange: THCFPresentationExchange = await retrieve_exchange(
-        context, query.get("exchange_record_id"), web.HTTPNotFound
+        context, exchange_record_id, web.HTTPNotFound
     )
 
     if exchange.role != exchange.ROLE_VERIFIER:
@@ -216,44 +188,62 @@ async def acknowledge_proof(request: web.BaseRequest):
     if exchange.state != exchange.STATE_PRESENTATION_RECEIVED:
         raise web.HTTPBadRequest(reason="Invalid exchange state")
 
-    connection_record: ConnectionRecord = await retrieve_connection(
-        context, exchange.connection_id
-    )
+    await retrieve_connection(context, exchange.connection_id)
 
-    try:
-        issuer: BaseIssuer = await context.inject(BaseIssuer)
-        credential = await issuer.create_credential_ex(
-            credential_values={
-                "oca_data": {
-                    "verified": str(query.get("status")),
-                    "presentation_dri": exchange.presentation_dri,
-                    "issuer_name": context.settings.get("default_label"),
+    message = None
+    if accept:
+        try:
+            issuer: BaseIssuer = await context.inject(BaseIssuer)
+            credential = await issuer.create_credential_ex(
+                credential_values={
+                    "oca_data": {
+                        "presentation_dri": exchange.presentation_dri,
+                        "issuer_name": context.settings.get("default_label"),
+                    },
+                    "oca_schema_dri": globals.ACK_CREDENTIAL_DRI,
                 },
-                "oca_schema_dri": "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn",
-            },
-            credential_type="ProofAcknowledgment",
-            subject_public_did=exchange.prover_public_did,
-        )
-    except IssuerError as err:
-        raise web.HTTPInternalServerError(
-            reason=f"Error occured while creating a credential {err.roll_up}"
-        )
+                credential_type="ProofAcknowledgment",
+                subject_public_did=exchange.prover_public_did,
+            )
+        except IssuerError as err:
+            raise web.HTTPInternalServerError(
+                reason=f"Error occured while creating a credential {err.roll_up}"
+            )
 
-    message = AcknowledgeProof(credential=credential)
+        message = AcknowledgeProof(credential=credential)
+        exchange.state = exchange.STATE_ACCEPTED
+    else:
+        message = AcknowledgeProof(credential=None)
+        exchange.state = exchange.STATE_REJECTED
     message.assign_thread_id(exchange.thread_id)
-    await outbound_handler(message, connection_id=connection_record.connection_id)
 
-    exchange.state = exchange.STATE_ACKNOWLEDGED
+    return message, exchange
+
+
+async def process_presentation_save(context, exchange, credential):
     await exchange.verifier_ack_cred_pds_set(context, credential)
     await exchange.save(context)
-    return web.json_response(
-        {
-            "success": True,
-            "message": "ack sent and exchange record updated",
-            "exchange_record_id": exchange._id,
-            "ack_credential_dri": exchange.acknowledgment_credential_dri,
-        }
-    )
+
+
+async def accept_or_reject_presentation_route(request, accept):
+    context = request.app["request_context"]
+    outbound_handler = request.app["outbound_message_router"]
+    presentation_id = request.match_info["presentation_id"]
+    message, exchange = await process_presentation(context, presentation_id, accept)
+    await outbound_handler(message, connection_id=exchange.connection_id)
+    return web.json_response()
+
+
+@docs(tags=["present-proof"], summary="Accept presentation")
+async def accept_presentation_route(request: web.BaseRequest):
+    result = await accept_or_reject_presentation_route(request, True)
+    return result
+
+
+@docs(tags=["present-proof"], summary="Reject a presentation")
+async def reject_presentation_route(request: web.BaseRequest):
+    result = await accept_or_reject_presentation_route(request, False)
+    return result
 
 
 @docs(tags=["present-proof"], summary="retrieve exchange record")
@@ -317,14 +307,6 @@ async def retrieve_credential_exchange_api(request: web.BaseRequest):
     return web.json_response({"success": True, "result": result})
 
 
-async def accept_presentation_route(request: web.BaseRequest):
-    pass
-
-
-async def reject_presentation_route(request: web.BaseRequest):
-    pass
-
-
 async def register(app: web.Application):
     """Register routes."""
 
@@ -347,10 +329,6 @@ async def register(app: web.Application):
             ),
             web.put(
                 "/presentations/{presentation_id}/accept", accept_presentation_route
-            ),
-            web.post(
-                "/present-proof/acknowledge",
-                acknowledge_proof,
             ),
             web.get(
                 "/present-proof/exchange/record",

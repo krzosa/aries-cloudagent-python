@@ -41,6 +41,9 @@ class THCFPresentationExchange(BaseExchangeRecord):
     STATE_PRESENTATION_ACKED = "presentation_acked"
     STATE_ACKNOWLEDGED = "presentation_acknowledged"
 
+    STATE_ACCEPTED = "presentation_accepted"
+    STATE_REJECTED = "presentation_rejected"
+
     def __init__(
         self,
         *,

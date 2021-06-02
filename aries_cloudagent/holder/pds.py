@@ -9,7 +9,6 @@ from aries_cloudagent.aathcf.credentials import (
     CredentialSchema,
     PresentationRequestSchema,
     PresentationSchema,
-    assert isinstance,
     create_proof,
     validate_schema,
     verify_proof,

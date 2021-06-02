@@ -9,6 +9,7 @@ REGISTERED_PDS = {
     }
 }
 CONSENT_DRI = "consent_dri"
+ACK_CREDENTIAL_DRI = "bCN4tzZssT4sDDFFTh5AmoesdQeeTSyjNrQ6gxnCerkn"
 
 
 CREDENTIALS_TABLE = "credentials"

@@ -17,16 +17,17 @@ import json
 from collections import OrderedDict
 
 
-async def handle_proof_presentation(context, connection_id, thread_id, presentation):
+# if presentation is None then it gets rejected
+async def handle_proof_presentation(
+    context, connection_id, thread_id, presentation, prover_public_did
+):
     verifier: BaseVerifier = await context.inject(BaseVerifier)
 
     request_accepted = True
     if presentation is None:
         request_accepted = False
     elif isinstance(presentation, str):
-        presentation = json.loads(
-            context.message.credential_presentation, object_pairs_hook=OrderedDict
-        )
+        presentation = json.loads(presentation, object_pairs_hook=OrderedDict)
     elif isinstance(presentation, OrderedDict):
         pass
     else:
@@ -43,13 +44,11 @@ async def handle_proof_presentation(context, connection_id, thread_id, presentat
     )
 
     if exchange.role != exchange.ROLE_VERIFIER:
-        raise HandlerException(reason="Invalid exchange role")
+        raise HandlerException("Invalid exchange role")
     if exchange.state != exchange.STATE_REQUEST_SENT:
-        raise HandlerException(reason="Invalid exchange state")
+        raise HandlerException("Invalid exchange state")
 
     if request_accepted:
-        exchange.state = exchange.STATE_REQUEST_DENIED
-    else:
         is_verified = await verifier.verify_presentation(
             presentation_request=exchange.presentation_request,
             presentation=presentation,
@@ -64,8 +63,10 @@ async def handle_proof_presentation(context, connection_id, thread_id, presentat
             )
         await exchange.presentation_pds_set(context, presentation)
         exchange.verified = True
-        exchange.prover_public_did = context.message.prover_public_did
+        exchange.prover_public_did = prover_public_did
         exchange.state = exchange.STATE_PRESENTATION_RECEIVED
+    else:
+        exchange.state = exchange.STATE_REQUEST_DENIED
 
     await exchange.save(context, reason="PresentationExchange updated!")
     return exchange
@@ -75,7 +76,11 @@ class PresentProofHandler(BaseHandler):
     async def handle(self, context: RequestContext, responder: BaseResponder):
         debug_handler(self._logger.info, context, PresentProof)
         exchange = await handle_proof_presentation(
-            context, responder.connection_id, context.message._thread_id
+            context,
+            responder.connection_id,
+            context.message._thread_id,
+            context.message.credential_presentation,
+            context.message.prover_public_did,
         )
 
         await responder.send_webhook(

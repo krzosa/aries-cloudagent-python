@@ -4,7 +4,6 @@ from .base import BaseVerifier
 from aries_cloudagent.aathcf.credentials import (
     PresentationRequestSchema,
     PresentationSchema,
-    assert isinstance,
     validate_schema,
 )
 from ..aathcf.credentials import verify_proof
