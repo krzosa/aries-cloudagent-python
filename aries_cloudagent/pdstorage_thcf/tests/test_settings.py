@@ -1,9 +1,5 @@
-from aries_cloudagent.aathcf.credentials import assert_type
-from aries_cloudagent.pdstorage_thcf.base import BasePDS
-from aries_cloudagent.storage.error import StorageNotFoundError
-from aries_cloudagent.pdstorage_thcf.models.saved_personal_storage import SavedPDS
 from asynctest import TestCase as AsyncTestCase, mock
-import asyncio, pytest, asynctest
+import asyncio
 import aries_cloudagent.pdstorage_thcf.api as api
 
 pds_set_setting = api.pds_set_setting

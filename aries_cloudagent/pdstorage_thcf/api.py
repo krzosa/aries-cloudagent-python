@@ -9,7 +9,6 @@ import multihash
 import logging
 import multibase
 from aries_cloudagent.storage.error import StorageNotFoundError
-from aries_cloudagent.aathcf.credentials import assert_type, assert_type_or
 import json
 from collections import OrderedDict
 
@@ -51,7 +50,7 @@ async def pds_load(
     context, id: str, *, with_meta: bool = False, with_meta_embed=False
 ) -> dict:
     if __debug__:
-        assert_type(id, str)
+        assert isinstance(id, str)
 
     pds = await pds_get_active(context)
     result = await pds.load(id)
@@ -81,7 +80,7 @@ async def pds_load(
 
 async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
     if __debug__:
-        assert_type(id, str)
+        assert isinstance(id, str)
 
     pds = await pds_get_active(context)
     result = await pds.load(id)
@@ -94,23 +93,23 @@ async def pds_load_string(context, id: str, *, with_meta: bool = False) -> str:
 
 async def pds_save(context, payload, oca_schema_dri: str = None) -> str:
     if __debug__:
-        assert_type_or(payload, str, dict)
+        assert isinstance(payload, (str, dict))
         if oca_schema_dri is not None:
-            assert_type(oca_schema_dri, str)
+            assert isinstance(oca_schema_dri, str)
 
     active_pds_name = await pds_active_get_full_name(context)
     pds = await pds_get_by_full_name(context, active_pds_name)
     payload_id = await pds.save(payload, oca_schema_dri)
 
     if __debug__:
-        assert_type(payload_id, str)
+        assert isinstance(payload_id, str)
 
     return payload_id
 
 
 async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
     if __debug__:
-        assert_type_or(oca_schema_dri, str, list)
+        assert isinstance(oca_schema_dri, (str, list))
 
     if isinstance(oca_schema_dri, str):
         oca_schema_dri = [oca_schema_dri]
@@ -131,7 +130,7 @@ async def pds_query_by_oca_schema_dri(context, oca_schema_dri: str or list):
 
 async def delete_record(context, id: str) -> str:
     if __debug__:
-        assert_type(id, str)
+        assert isinstance(id, str)
 
     pds = await pds_get_active(context)
     result = await pds.delete(id)
@@ -173,7 +172,7 @@ async def pds_save_chunks(context, chunks):
 
 
 def encode(data: str) -> str:
-    assert_type(data, str)
+    assert isinstance(data, str)
     hash_object = hashlib.sha256()
     hash_object.update(bytes(data, "utf-8"))
     multi = multihash.encode(hash_object.digest(), "sha2-256")
@@ -185,9 +184,9 @@ def encode(data: str) -> str:
 async def pds_configure_instance(context, driver_name, instance_name, driver_setting):
     """Creates a new instance if it doesn't exists"""
     if __debug__:
-        assert_type(driver_setting, dict) and driver_setting is not {}
-        assert_type(driver_name, str)
-        assert_type(instance_name, str)
+        assert isinstance(driver_setting, dict) and driver_setting is not {}
+        assert isinstance(driver_name, str)
+        assert isinstance(instance_name, str)
 
     pds = await pds_get(context, driver_name, instance_name)
     pds.settings = driver_setting
@@ -216,11 +215,11 @@ async def pds_set_setting(
     context, driver_name, instance_name, client_id, client_secret, driver_setting: dict
 ):
     if __debug__:
-        assert_type(driver_setting, dict) and driver_setting is not {}
-        assert_type(driver_name, str)
-        assert_type(instance_name, str)
-        assert_type(client_id, str)
-        assert_type(client_secret, str)
+        assert isinstance(driver_setting, dict) and driver_setting is not {}
+        assert isinstance(driver_name, str)
+        assert isinstance(instance_name, str)
+        assert isinstance(client_id, str)
+        assert isinstance(client_secret, str)
 
     driver_setting["client_secret"] = client_secret
     driver_setting["client_id"] = client_id
@@ -246,11 +245,11 @@ async def pds_set_settings(context, settings: list):
         driver_name = driver_setting.get("name", None)
         driver_setting = driver_setting.get(driver_name, None)
         if __debug__:
-            assert_type(instance_name, str)
-            assert_type(client_id, str)
-            assert_type(client_secret, str)
-            assert_type(driver_setting, dict)
-            assert_type(driver_name, str)
+            assert isinstance(instance_name, str)
+            assert isinstance(client_id, str)
+            assert isinstance(client_secret, str)
+            assert isinstance(driver_setting, dict)
+            assert isinstance(driver_name, str)
         connected, exception = await pds_set_setting(
             context,
             driver_name,

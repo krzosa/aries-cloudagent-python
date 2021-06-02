@@ -9,7 +9,6 @@ import logging
 from urllib.parse import urlparse
 
 from aiohttp import ClientSession, ClientConnectionError, ClientError
-from aries_cloudagent.aathcf.credentials import assert_type
 import time
 from collections import OrderedDict
 
@@ -150,7 +149,7 @@ class OwnYourDataVault(BasePDS):
             await self.update_token()
 
     async def load(self, dri: str) -> dict:
-        assert_type(dri, str)
+        assert isinstance(dri, str)
         await self.update_token_when_expired()
 
         url = f"{self.api_url}/api/data/{dri}?p=dri&f=plain"
@@ -169,7 +168,7 @@ class OwnYourDataVault(BasePDS):
 
         table = self.settings.get("repo", "dip.data")
         if oca_schema_dri is not None:
-            assert_type(oca_schema_dri, str)
+            assert isinstance(oca_schema_dri, str)
             table += "." + oca_schema_dri
 
         dri_value = None
@@ -215,7 +214,7 @@ class OwnYourDataVault(BasePDS):
 
     async def query_by_oca_schema_dri(self, oca_schema_dri: str = None):
         if __debug__:
-            assert_type(oca_schema_dri, str)
+            assert isinstance(oca_schema_dri, str)
 
         await self.update_token_when_expired()
         url = f"{self.api_url}/api/data"

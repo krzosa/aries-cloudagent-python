@@ -9,8 +9,7 @@ from aries_cloudagent.aathcf.credentials import (
     CredentialSchema,
     PresentationRequestSchema,
     PresentationSchema,
-    assert_type,
-    assert_type_or,
+    assert isinstance,
     create_proof,
     validate_schema,
     verify_proof,
@@ -49,7 +48,7 @@ class PDSHolder(BaseHolder):
             raise HolderError(err.roll_up)
 
         credential = json.dumps(credential)
-        assert_type(credential, str)
+        assert isinstance(credential, str)
         return credential
 
     async def delete_credential(self, credential_id: str):
@@ -94,8 +93,8 @@ class PDSHolder(BaseHolder):
             credential_definitions: Indy formatted credential definitions JSON
             rev_states: Indy format revocation states JSON
         """
-        assert_type_or(presentation_request, OrderedDict, dict)
-        assert_type_or(requested_credentials, OrderedDict, dict)
+        assert isinstance(presentation_request, (dict, OrderedDict))
+        assert isinstance(requested_credentials, (dict, OrderedDict))
 
         validate_schema(
             PresentationRequestSchema,
@@ -104,7 +103,6 @@ class PDSHolder(BaseHolder):
             self.logger.error,
         )
 
-        requested = presentation_request.get("requested_attributes")
         credential_id = requested_credentials.get("credential_id")
 
         if credential_id is None:
